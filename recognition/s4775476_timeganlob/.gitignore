@@ -1,0 +1,8 @@
+__pycache__/
+*.csv
+*.pt
+*.pkl
+outputs/
+checkpoints/
+logs/
+
