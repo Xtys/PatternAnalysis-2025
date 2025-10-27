@@ -1,24 +1,77 @@
-"""
-Preprocesses LOBSTER Limit Order Book (Level 10) data for TimeGAN training.
-
-Input  : message_10.csv and orderbook_10.csv (aligned by event index)
-Output : NumPy arrays (train, val, test) of shape [num_seq, seq_len, num_features]
-
-Features used:
-    midprice  = (ask1 + bid1) / 2
-    spread    = ask1 - bid1
-    imbalance = (bid_size1 - ask_size1) / (bid_size1 + ask_size1)
-
-Compatible with local Linux dev and Google Colab (T4 GPU).
-"""
-
-import os
-import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+from torch.utils.data import Dataset
+import torch
+import os
 
-# Configurable parameters
-DATA_DIR = "data"  # change if using Google Drive on Colab
-SEQ_LEN = 100  # window length
-VAL_SPLIT = 0.1
-TEST_SPLIT = 0.1
+
+class LOBDataset(Dataset):
+    """
+    Loads message.csv and orderbook.csv.
+    """
+
+    def __init__(
+        self,
+        msg_file,
+        ob_file,
+        seq_len=20,
+        step=10,
+        train=True,
+        val_split=0.1,
+        scaler_type="standard",
+    ):
+        base_dir = self._resolve_data_dir()
+        msg_df, ob_df = self._load_data(base_dir, msg_file, ob_file)
+        ob_df = self._compute_features(ob_df)
+        X = self._normalize_features(ob_df, scaler_type, train)
+        self.data = self._build_sequences(X, seq_len, step)
+        self.data = self._split_data(self.data, train, val_split)
+        self.split_type = "train" if train else ("val" if val_split > 0 else "test")
+        self.seq_len = seq_len
+        self.num_features = X.shape[1]
+        print(
+            f"Split {self.split_type}: {len(self.data)} seqs (T={seq_len}, F={self.num_features}); full snaps: {len(ob_df)}"
+        )
+
+    def _resolve_data_dir(self):
+        """Detect data folder (local vs Colab)."""
+        return "data" if os.path.exists("data") else "."
+
+    def _load_data(self, base_dir, msg_file, ob_file):
+        """Load LOBSTER message and orderbook data with chunks."""
+        msg_path = os.path.join(base_dir, os.path.basename(msg_file))
+        ob_path = os.path.join(base_dir, os.path.basename(ob_file))
+
+        # Chunks for large files
+        chunksize = 100000
+        msg_chunks = pd.read_csv(
+            msg_path,
+            chunksize=chunksize,
+            header=None,
+            names=["time", "type", "order_id", "size", "price", "side"],
+        )
+        ob_chunks = pd.read_csv(ob_path, chunksize=chunksize, header=None)
+
+        # order book cols:
+        ob_cols = [
+            f"{side}{lvl}_{x}"
+            for side in ("bid", "ask")
+            for lvl in range(1, 11)
+            for x in ("p", "s")
+        ]
+
+        msg_df = pd.concat(msg_chunks, ignore_index=True)
+        ob_df = pd.concat(ob_chunks, ignore_index=True)
+        ob_df.columns = ob_cols
+
+        return msg_df, ob_df
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return torch.tensor(self.data[idx], dtype=torch.float32)
+
+
+if __name__ == "__main__":
+    msg_file = "AMZN_2012-06-21_34200000_57600000_message_10.csv"
+    ob_file = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
