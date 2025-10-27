@@ -21,16 +21,8 @@ class LOBDataset(Dataset):
     ):
         base_dir = self._resolve_data_dir()
         msg_df, ob_df = self._load_data(base_dir, msg_file, ob_file)
-        ob_df = self._compute_features(ob_df)
-        X = self._normalize_features(ob_df, scaler_type, train)
-        self.data = self._build_sequences(X, seq_len, step)
-        self.data = self._split_data(self.data, train, val_split)
-        self.split_type = "train" if train else ("val" if val_split > 0 else "test")
-        self.seq_len = seq_len
-        self.num_features = X.shape[1]
-        print(
-            f"Split {self.split_type}: {len(self.data)} seqs (T={seq_len}, F={self.num_features}); full snaps: {len(ob_df)}"
-        )
+        self.data = ob_df.values
+        print(f"Loaded {len(ob_df)} snapshots, {ob_df.shape[1]} columns")
 
     def _resolve_data_dir(self):
         """Detect data folder (local vs Colab)."""
@@ -41,7 +33,6 @@ class LOBDataset(Dataset):
         msg_path = os.path.join(base_dir, os.path.basename(msg_file))
         ob_path = os.path.join(base_dir, os.path.basename(ob_file))
 
-        # Chunks for large files
         chunksize = 100000
         msg_chunks = pd.read_csv(
             msg_path,
@@ -62,7 +53,6 @@ class LOBDataset(Dataset):
         msg_df = pd.concat(msg_chunks, ignore_index=True)
         ob_df = pd.concat(ob_chunks, ignore_index=True)
         ob_df.columns = ob_cols
-
         return msg_df, ob_df
 
     def __len__(self):
@@ -75,3 +65,10 @@ class LOBDataset(Dataset):
 if __name__ == "__main__":
     msg_file = "AMZN_2012-06-21_34200000_57600000_message_10.csv"
     ob_file = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
+
+    train_ds = LOBDataset(
+        msg_file, ob_file, train=True, val_split=0.1, scaler_type="standard"
+    )
+    print(
+        f"Train: {len(train_ds)} seqs, shape: {train_ds.data.shape if len(train_ds.data) > 0 else 'empty'}"
+    )
