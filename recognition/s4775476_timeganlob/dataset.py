@@ -11,12 +11,15 @@ class LOBDataset(Dataset):
     Loads message.csv and orderbook.csv, then computes:
     mid-price, spread, mid-price returns, imbalance,
     relative bid/ask prices, and log sizes. Then normalizes features.
+    data is then passed into  sliding-window sequence generation and train/val/test split
     """
 
     def __init__(
         self,
         msg_file,
         ob_file,
+        seq_len=20,
+        step=10,
         train=True,
         val_split=0.1,
         scaler_type="standard",
@@ -26,13 +29,13 @@ class LOBDataset(Dataset):
         ob_df = self._compute_features(ob_df)
         ob_df = self._add_relative_features(ob_df)
         X = self._normalize_features(ob_df, scaler_type, train)
+        seq_data = self._build_sequences(X, seq_len, step)
+        self.data = self._split_data(seq_data, train, val_split)
 
-        # Save normalized features for now
-        self.data = X
+        self.split_type = "train" if train else ("val" if val_split > 0 else "test")
 
         print(
-            f"Loaded {len(self.data)} normalized samples "
-            f"with {self.data.shape[1]} features."
+            f"Split {self.split_type}: {len(self.data)} seqs (T={seq_len}, F={X.shape[1]}); full snaps: {len(ob_df)}"
         )
 
     # basic loaders
@@ -98,8 +101,8 @@ class LOBDataset(Dataset):
         print(f"Added relative/log features: {ob_df.shape[1]} columns.")
         return ob_df
 
+    # Fit or load a scaler, then normalize features.
     def _normalize_features(self, ob_df, scaler_type, train):
-        """Fit or load a scaler, then normalize features."""
         X = ob_df.values.astype(np.float32)
         scaler_path = f"scaler_{scaler_type}.pt"
         if train:
@@ -117,6 +120,27 @@ class LOBDataset(Dataset):
             print(f"Scaler loaded from {scaler_path}")
         return X
 
+    def _build_sequences(self, X, seq_len, step):
+        """Create sliding windows for sequential input."""
+        indices = np.arange(0, len(X) - seq_len + 1, step)
+        sequences = np.stack([X[i : i + seq_len] for i in indices])
+        print(f"Built {len(sequences)} sequences of length {seq_len}")
+        return sequences
+
+    # Split train/val/test (70/10/20)
+    def _split_data(self, data, train, val_split):
+        n = len(data)
+        n_test = int(n * 0.2)
+        n_val = int(n * val_split)
+        n_train = n - n_val - n_test
+
+        if train:
+            return data[:n_train]
+        elif val_split > 0:
+            return data[n_train : n_train + n_val]
+        else:
+            return data[n_train:]
+
     def __len__(self):
         return len(self.data)
 
@@ -127,5 +151,5 @@ class LOBDataset(Dataset):
 if __name__ == "__main__":
     msg_file = "AMZN_2012-06-21_34200000_57600000_message_10.csv"
     ob_file = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
-    train_ds = LOBDataset(msg_file, ob_file, train=True)
-    print(f"Train: {len(train_ds)} samples, shape: {train_ds.data.shape}")
+    train_ds = LOBDataset(msg_file, ob_file, train=True, val_split=0.1)
+    print(f"Train: {len(train_ds)} seqs, shape: {train_ds.data.shape}")
