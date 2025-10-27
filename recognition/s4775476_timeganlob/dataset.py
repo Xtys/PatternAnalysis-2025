@@ -1,3 +1,12 @@
+"""
+This module defines the LOBDataset class.It also contains supporting functions for loading,
+preprocessing, and normalising the Limit Order Book data (LOBSTER)
+
+Created by:     Brandon Loh
+ID:             S47754764
+Last update:    27/10/2025
+"""
+
 import pandas as pd
 from torch.utils.data import Dataset
 import torch
@@ -8,10 +17,19 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 class LOBDataset(Dataset):
     """
-    Loads message.csv and orderbook.csv, then computes:
-    mid-price, spread, mid-price returns, imbalance,
-    relative bid/ask prices, and log sizes. Then normalizes features.
-    data is then passed into  sliding-window sequence generation and train/val/test split
+    This class loads message and orderbook CSV files, computes microstructure features
+    e.g., mid-price, spread, returns, imbalance), adds relative and log-transformed features,
+    normalizes them using a fitted or loaded scaler, generates sliding-window sequences,
+    and splits into train/validation/test sets.
+
+    Args:
+        msg_file (str): Path to the message CSV file.
+        ob_file (str): Path to the orderbook CSV file.
+        seq_len (int, optional): Length of each input sequence (time steps). Defaults to 20.
+        step (int, optional): Step size for sliding window (overlap). Defaults to 10.
+        train (bool, optional): If True, fit a new scaler and use train split; else load scaler and use val/test. Defaults to True.
+        val_split (float, optional): Fraction of data for validation (only used if train=False and val_split>0). Defaults to 0.1.
+        scaler_type (str, optional): Normalization type: 'standard' (z-score) or 'minmax' (to [-1,1]). Defaults to 'standard'.
     """
 
     def __init__(
@@ -40,10 +58,26 @@ class LOBDataset(Dataset):
 
     # basic loaders
     def _resolve_data_dir(self):
+        """
+        Resolve the base directory for data files.
+
+        Returns:
+            str: 'data' if it exists, else current directory '.'
+        """
         return "data" if os.path.exists("data") else "."
 
     def _load_data(self, base_dir, msg_file, ob_file):
-        """Load LOBSTER message and orderbook data."""
+        """
+        Load LOBSTER message and orderbook data from CSV files using chunked reading.
+
+        Args:
+            base_dir (str): Base directory for files.
+            msg_file (str): Name of message CSV.
+            ob_file (str): Name of orderbook CSV.
+
+        Returns:
+            tuple[pd.DataFrame, pd.DataFrame]: Loaded message and orderbook DataFrames.
+        """
         msg_path = os.path.join(base_dir, os.path.basename(msg_file))
         ob_path = os.path.join(base_dir, os.path.basename(ob_file))
 
@@ -68,7 +102,15 @@ class LOBDataset(Dataset):
 
     # feature engineering
     def _compute_features(self, ob_df):
-        """Compute mid-price, spread, mid-ret, imbalance."""
+        """
+        Compute core microstructure features from orderbook snapshots.
+
+        Args:
+            ob_df (pd.DataFrame): Raw orderbook DataFrame with bid/ask prices/sizes.
+
+        Returns:
+            pd.DataFrame: Augmented DataFrame with 'mid', 'spread', 'mid_ret', 'imbalance'.
+        """
         ob_df["mid"] = (ob_df["bid1_p"] + ob_df["ask1_p"]) / 2 / 10000.0
         ob_df["spread"] = (ob_df["ask1_p"] - ob_df["bid1_p"]) / 100.0
         ob_df["mid_ret"] = np.log(ob_df["mid"] / ob_df["mid"].shift(1)).fillna(0)
@@ -81,7 +123,15 @@ class LOBDataset(Dataset):
         return ob_df
 
     def _add_relative_features(self, ob_df):
-        """Add relative bid/ask prices (ticks from mid) and log sizes."""
+        """
+        Add relative price features (ticks from mid) and log-transformed sizes.
+
+        Args:
+            ob_df (pd.DataFrame): DataFrame with base features.
+
+        Returns:
+            pd.DataFrame: Selected features only, dropped NaNs, with relative/log columns.
+        """
         for lvl in range(1, 11):
             ob_df[f"bid{lvl}_p_rel"] = (
                 (ob_df[f"bid{lvl}_p"] / 10000.0) - ob_df["mid"]
@@ -101,8 +151,18 @@ class LOBDataset(Dataset):
         print(f"Added relative/log features: {ob_df.shape[1]} columns.")
         return ob_df
 
-    # Fit or load a scaler, then normalize features.
     def _normalize_features(self, ob_df, scaler_type, train):
+        """
+        Normalize features using a fitted or loaded scaler.
+
+        Args:
+            ob_df (pd.DataFrame): Feature DataFrame.
+            scaler_type (str): 'standard' or 'minmax'.
+            train (bool): If True, fit new scaler; else load existing.
+
+        Returns:
+            np.ndarray: Normalized features as float32 array.
+        """
         X = ob_df.values.astype(np.float32)
         scaler_path = f"scaler_{scaler_type}.pt"
         if train:
@@ -121,14 +181,34 @@ class LOBDataset(Dataset):
         return X
 
     def _build_sequences(self, X, seq_len, step):
-        """Create sliding windows for sequential input."""
+        """
+        Create overlapping sequences from normalized features using sliding windows.
+
+        Args:
+            X (np.ndarray): Normalized feature array (n_samples, n_features).
+            seq_len (int): Sequence length.
+            step (int): Step size.
+
+        Returns:
+            np.ndarray: Stacked sequences (n_seqs, seq_len, n_features).
+        """
         indices = np.arange(0, len(X) - seq_len + 1, step)
         sequences = np.stack([X[i : i + seq_len] for i in indices])
         print(f"Built {len(sequences)} sequences of length {seq_len}")
         return sequences
 
-    # Split train/val/test (70/10/20)
     def _split_data(self, data, train, val_split):
+        """
+        Split sequences into train/val/test subsets.
+
+        Args:
+            data (np.ndarray): Full sequence array.
+            train (bool): Use train split.
+            val_split (float): Val fraction (if >0 and not train).
+
+        Returns:
+            np.ndarray: Subset of sequences.
+        """
         n = len(data)
         n_test = int(n * 0.2)
         n_val = int(n * val_split)
@@ -142,9 +222,24 @@ class LOBDataset(Dataset):
             return data[n_train:]
 
     def __len__(self):
+        """
+        Get the number of sequences in the dataset.
+
+        Returns:
+            int: Number of sequences.
+        """
         return len(self.data)
 
     def __getitem__(self, idx):
+        """
+        Get a sequence by index.
+
+        Args:
+            idx (int): Sequence index.
+
+        Returns:
+            torch.Tensor: Sequence tensor (seq_len, n_features), dtype float32.
+        """
         return torch.tensor(self.data[idx], dtype=torch.float32)
 
 
