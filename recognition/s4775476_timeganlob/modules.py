@@ -1,11 +1,15 @@
 """
 Contains source code components of TimeGAN model.
+Model design includes Embedder (E), Recovery (R), Supervisor (S),
+Generator (G), and Discriminator (D).
 
 Created by:     Brandon Loh
 ID:             S47754764
 Last update:    28/10/2025
 
-Reference: https://github.com/jsyoon0823/TimeGAN
+Reference:
+    Yoon, Jinsung et al. (2019), "Time-series Generative Adversarial Networks."
+    https://github.com/jsyoon0823/TimeGAN
 """
 
 import torch
@@ -15,9 +19,14 @@ import torch.nn.functional as F  # tanh/ sigmoid
 
 class Embedder(nn.Module):
     """
-    Encodes input sequence X (B,T, 43) to latent H (B, T, 64)
-    via RNN (GRu/LSTM recurrent h_t for temporal compression)
-    with FC/tanh non-linear projection.
+    Encodes input sequence X (B, T, 43) to latent representation H (B, T, 64)
+    using an RNN (GRu/LSTM) followed by fully connected tanh projection.
+
+    Args:
+        input_dim:  number of features in X (default 43)
+        hidden_dim: dimension of latent embedding H (default 64)
+        num_layers: number of recurrent layers (default 1)
+        rnn_type:   'GRU' or 'LSTM' (default 'GRU')
     """
 
     def __init__(self, input_dim=43, hidden_dim=64, num_layers=1, rnn_type="GRU"):
@@ -32,9 +41,9 @@ class Embedder(nn.Module):
 
     def forward(self, x):
         """
-        RNN unroll on X.
-        Input: x (B, T, 43)
-        Output: h (B, T, 64)
+        Forward pass:
+            Input: X (B, T, 43)
+            Output: H (B, T, 64)
         """
         rnn_out, _ = self.rnn(x)
         out = self.fc(rnn_out)
@@ -44,7 +53,7 @@ class Embedder(nn.Module):
 
 class Recovery(nn.Module):
     """
-    Decodes latent representation H(64) to reconstructed X(43),
+    Decodes the latent representation H(64) back to reconstructed data X̂ R^(B, T, 43),
     """
 
     def __init__(self, hidden_dim=64, output_dim=43, num_layers=1, rnn_type="GRU"):
@@ -65,7 +74,14 @@ class Recovery(nn.Module):
 
 class Supervisor(nn.Module):
     """
-    Predicts the next feature vector given the current feature vector.
+    Predicts the next-step latent state H_{t+1} given H_t, enforcing
+    temporal consistency in latent space. Used for supervised loss L_sup.
+
+    Args:
+        feature_dim (int): Input feature dimension (default = 43).
+        hidden_dim  (int): Latent feature dimension (default = 64).
+        num_layers  (int): Number of RNN layers (default = 1).
+        rnn_type    (str): 'GRU' or 'LSTM' (default = 'GRU').
     """
 
     def __init__(self, feature_dim=43, hidden_dim=64, num_layers=1, rnn_type="GRU"):
@@ -80,11 +96,8 @@ class Supervisor(nn.Module):
 
     def forward(self, x):
         """
-        RNN on X, FC/tanh non-linear, slice for pred targets X
-        Input:
-            x: (B, T, 43)
-        Output:
-            out: (B, T-1, 64)
+        Input:  H (B, T, 64)
+        Output: Ĥ (B, T-1, 64)
         """
         rnn_out, _ = self.rnn(x)
         out = self.fc(rnn_out)
@@ -95,7 +108,13 @@ class Supervisor(nn.Module):
 
 class Generator(nn.Module):
     """
-    Generates fake latent Ĥ (B, T, 64) from noise z (B, T, 64)
+    Generates synthetic latent sequence Ĥ (B, T, 64) from noise z (B, T, 64)
+
+    Args:
+        hidden_dim (int): Latent dimension (default = 64).
+        output_dim (int): Output latent dimension (default = 64).
+        num_layers (int): Number of RNN layers (default = 1).
+        rnn_type   (str): 'GRU' or 'LSTM' (default = 'GRU').
     """
 
     def __init__(self, hidden_dim=64, output_dim=64, num_layers=1, rnn_type="GRU"):
@@ -110,11 +129,11 @@ class Generator(nn.Module):
 
     def forward(self, z):
         """
-        Forward RNN on z to FC/tanh for Ĥ
-        Input:
-            z (B, T, 64)
-        Output:
-            Ĥ (B, T, 64)
+        Forward pass.
+        Args:
+            z (Tensor): Noise sequence (B, T, 64)
+        Returns:
+            Tensor: Synthetic latent sequence Ĥ (B, T, 64)
         """
         rnn_out, _ = self.rnn(z)
         out = self.fc(rnn_out)
@@ -124,7 +143,17 @@ class Generator(nn.Module):
 
 class Discriminator(nn.Module):
     """
-    Classifies real/fakes seq X (B, T, 43)
+    Classifies latent sequences as real or fake.
+
+    Purpose:
+        - Distinguishes E(X) (real latent) from G(Z) (synthetic latent).
+        - Provides adversarial feedback to the generator.
+
+    Args:
+        input_dim  (int): Input latent feature dimension (default = 64).
+        hidden_dim (int): Hidden dimension size (default = 64).
+        num_layers (int): Number of RNN layers (default = 1).
+        rnn_type   (str): 'GRU' or 'LSTM' (default = 'GRU').
     """
 
     def __init__(self, input_dim=64, hidden_dim=64, num_layers=1, rnn_type="GRU"):
@@ -139,16 +168,16 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         """
-        Forward RNN on X to last h_T (seq summary)
-        Input:
-            x (B, T, 64)
-        Output:
-            logit (B, 1)
+        Forward pass.
+        Args:
+            x (Tensor): Input latent sequence (B, T, 64)
+        Returns:
+            Tensor: Real/fake probability (B, 1)
         """
         rnn_out, _ = self.rnn(x)
         out = self.fc(rnn_out[:, -1, :])
         out = self.sigmoid(out)
-        return out  # (B, 1)
+        return out
 
 
 # Params counter
@@ -180,7 +209,7 @@ if __name__ == "__main__":
     print(f"Generator: {x_fake.shape}, params: {count_params(g):,}")
 
     d = Discriminator()
-    logit = d(dummy_x)
+    logit = d(h)
     print(f"Discriminator: {logit.shape}, params: {count_params(d):,}")
 
     print(
