@@ -101,47 +101,94 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     # Tracking
     loss_history = {"recon": [], "sup": [], "d_adv": [], "g_adv": []}
 
+    # Phase 1: Supervised Pretrain (E+R (reconstruction) and S (temporal sup))
+    print("--- Phase 1: Reconstruction + Supervisor pretraining ---")
+    for epoch in range(SUP_EPOCHS):
+        E.train()
+        R.train()
+        S.train()
+        epoch_recon_total, epoch_sup_total = 0, 0
 
-# Phase 1: Supervised Pretrain (E+R (reconstruction) and S (temporal sup))
-print("--- Phase 1: Reconstruction + Supervisor pretraining ---")
-for epoch in range(SUP_EPOCHS):
-    E.train()
-    R.train()
-    S.train()
-    epoch_recon_total, epoch_sup_total = 0, 0
+        pbar = tqdm(train_loader, desc=f"Sup Epoch {epoch + 1}/{SUP_EPOCHS}")
+        for x in pbar:
+            x = x.to(device)  # (B,T,43)
 
-    pbar = tqdm(train_loader, desc=f"Sup Epoch {epoch + 1}/{SUP_EPOCHS}")
-    for x in pbar:
-        x = x.to(device)  # (B,T,43)
+            # Reconstruction: E => R => X_rec_hat
+            h_real = E(x)  # (B,T,64)
+            x_rec = R(h_real)  # (B,T,43)
+            recon_l = recon_loss_fn(x_rec, x)
 
-        # Reconstruction: E => R => X_rec_hat
-        h_real = E(x)  # (B,T,64)
-        x_rec = R(h_real)  # (B,T,43)
-        recon_l = recon_loss_fn(x_rec, x)
+            opt_E.zero_grad()
+            opt_R.zero_grad()
+            recon_l.backward()
+            opt_E.step()
+            opt_R.step()
 
-        opt_E.zero_grad()
-        opt_R.zero_grad()
-        recon_l.backward()
-        opt_E.step()
-        opt_R.step()
+            # Supervisor:S predicts future latent state of E(x)d
+            # S(x) -> (B,T-1,64)
+            h_pred_next = S(x)  # predicted latent for t+1
+            h_target = h_real[:, 1:, :]  # actual latent at t+1
+            sup_l = sup_loss_fn(h_pred_next, h_target)
 
-        # Supervisor:S predicts future latent state of E(x)d
-        # S(x) -> (B,T-1,64)
-        h_pred_next = S(x)  # predicted latent for t+1
-        h_target = h_real[:, 1:, :]  # actual latent at t+1
-        sup_l = sup_loss_fn(h_pred_next, h_target)
+            opt_S.zero_grad()
+            sup_l.backward()
+            opt_S.step()
 
-        opt_S.zero_grad()
-        sup_l.backward()
-        opt_S.step()
+            epoch_recon_total += recon_l.item()
+            epoch_sup_total += sup_l.item()
+            pbar.set_postfix({"recon": f"{recon_l:.4f}", "sup": f"{sup_l:.4f}"})
 
-        epoch_recon_total += recon_l.item()
-        epoch_sup_total += sup_l.item()
-        pbar.set_postfix({"recon": f"{recon_l:.4f}", "sup": f"{sup_l:.4f}"})
+        avg_recon = epoch_recon_total / len(train_loader)
+        avg_sup = epoch_sup_total / len(train_loader)
+        loss_history["recon"].append(avg_recon)
+        loss_history["sup"].append(avg_sup)
 
-    avg_recon = epoch_recon_total / len(train_loader)
-    avg_sup = epoch_sup_total / len(train_loader)
-    loss_history["recon"].append(avg_recon)
-    loss_history["sup"].append(avg_sup)
+        print(f"[Phase1][Epoch {epoch + 1}] recon={avg_recon:.4f}  sup={avg_sup:.4f}")
 
-    print(f"[Phase1][Epoch {epoch + 1}] recon={avg_recon:.4f}  sup={avg_sup:.4f}")
+    # phase 2: Adversarial Training
+    print("=== Phase 2: Adversarial training ===")
+    for epoch in range(ADV_EPOCHS):
+        E.train()
+        R.train()
+        S.train()
+        G.train()
+        D.train()
+        epoch_d_total, epoch_g_total = 0, 0
+
+        pbar = tqdm(train_loader, desc=f"Adv Epoch {epoch + 1}/{ADV_EPOCHS}")
+        for x in pbar:
+            x = x.to(device)
+            h_real = E(x)
+            z = torch.randn(x.size(0), SEQ_LEN, HIDDEN_DIM, device=device)
+            h_fake = G(z)
+
+            # Discriminator
+            real_lbl = torch.ones(x.size(0), 1, device=device)
+            fake_lbl = torch.zeros(x.size(0), 1, device=device)
+            d_real = D(h_real)
+            d_fake = D(h_fake.detach())
+            d_loss = adv_loss_fn(d_real, real_lbl) + adv_loss_fn(d_fake, fake_lbl)
+            opt_D.zero_grad()
+            d_loss.backward()
+            opt_D.step()
+
+            # Generator
+            d_fake_for_g = D(h_fake)
+            g_adv_loss = adv_loss_fn(d_fake_for_g, real_lbl)
+            h_fake_next_pred = S(x)
+            h_real_next = h_real[:, 1:, :]
+            sup_consistency = sup_loss_fn(h_fake_next_pred, h_real_next)
+            g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency
+            opt_G.zero_grad()
+            g_total_loss.backward()
+            opt_G.step()
+
+            epoch_d_total += d_loss.item()
+            epoch_g_total += g_total_loss.item()
+            pbar.set_postfix({"D": f"{d_loss:.4f}", "G": f"{g_total_loss:.4f}"})
+
+        loss_history["d_adv"].append(epoch_d_total / len(train_loader))
+        loss_history["g_adv"].append(epoch_g_total / len(train_loader))
+        print(
+            f"[Phase2][Epoch {epoch + 1}] D={loss_history['d_adv'][-1]:.4f} G={loss_history['g_adv'][-1]:.4f}"
+        )
