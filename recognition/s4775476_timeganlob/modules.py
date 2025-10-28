@@ -8,22 +8,20 @@ Last update:    28/10/2025
 Reference: https://github.com/jsyoon0823/TimeGAN
 """
 
-from turtle import hideturtle
-from typing_extensions import ReadOnly
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # tanh/ sigmoid
 
 
-# encodes X to H for latent adv P(H|X), using GRU/LSTM
 class Embedder(nn.Module):
     """
-    Embedder (E): encodes input data X, RNN to latent representation H.
+    Encodes input sequence X (B,T, 43) to latent H (B, T, 64)
+    via RNN (GRu/LSTM recurrent h_t for temporal compression)
+    with FC/tanh non-linear projection.
     """
 
     def __init__(self, input_dim=43, hidden_dim=64, num_layers=1, rnn_type="GRU"):
         super(Embedder, self).__init__()
-
         self.rnn = (
             nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
             if rnn_type == "GRU"
@@ -33,6 +31,11 @@ class Embedder(nn.Module):
         self.tanh = nn.Tanh()
 
     def forward(self, x):
+        """
+        RNN unroll on X.
+        Input: x (B, T, 43)
+        Output: h (B, T, 64)
+        """
         rnn_out, _ = self.rnn(x)
         out = self.fc(rnn_out)
         out = self.tanh(out)
@@ -41,12 +44,11 @@ class Embedder(nn.Module):
 
 class Recovery(nn.Module):
     """
-    Recovery (R): decodes latent representation H to X, RNN to original data X.
+    Decodes latent representation H(64) to reconstructed X(43),
     """
 
     def __init__(self, hidden_dim=64, output_dim=43, num_layers=1, rnn_type="GRU"):
         super(Recovery, self).__init__()
-
         self.rnn = (
             nn.GRU(hidden_dim, hidden_dim, num_layers, batch_first=True)
             if rnn_type == "GRU"
@@ -62,9 +64,12 @@ class Recovery(nn.Module):
 
 
 class Supervisor(nn.Module):
+    """
+    Predicts the next feature vector given the current feature vector.
+    """
+
     def __init__(self, feature_dim=43, hidden_dim=64, num_layers=1, rnn_type="GRU"):
         super(Supervisor, self).__init__()
-
         self.rnn = (
             nn.GRU(feature_dim, hidden_dim, num_layers, batch_first=True)
             if rnn_type == "GRU"
@@ -74,16 +79,27 @@ class Supervisor(nn.Module):
         self.tanh = nn.Tanh()
 
     def forward(self, x):
+        """
+        RNN on X, FC/tanh non-linear, slice for pred targets X
+        Input:
+            x: (B, T, 43)
+        Output:
+            out: (B, T-1, 64)
+        """
         rnn_out, _ = self.rnn(x)
         out = self.fc(rnn_out)
         out = self.tanh(out)
-        return out[:, -1, :]
+        # Shifted (B, T-1, hidden_dim) for autoregressive
+        return out[:, :-1, :]
 
 
 class Generator(nn.Module):
-    def __init__(self, hidden_dim=64, output_dim=43, num_layers=1, rnn_type="GRU"):
-        super(Generator, self).__init__()
+    """
+    Generates fake latent Ĥ (B, T, 64) from noise z (B, T, 64)
+    """
 
+    def __init__(self, hidden_dim=64, output_dim=64, num_layers=1, rnn_type="GRU"):
+        super(Generator, self).__init__()
         self.rnn = (
             nn.GRU(hidden_dim, hidden_dim, num_layers, batch_first=True)
             if rnn_type == "GRU"
@@ -93,6 +109,13 @@ class Generator(nn.Module):
         self.tanh = nn.Tanh()
 
     def forward(self, z):
+        """
+        Forward RNN on z to FC/tanh for Ĥ
+        Input:
+            z (B, T, 64)
+        Output:
+            Ĥ (B, T, 64)
+        """
         rnn_out, _ = self.rnn(z)
         out = self.fc(rnn_out)
         out = self.tanh(out)
@@ -100,9 +123,12 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, input_dim=43, hidden_dim=64, num_layers=1, rnn_type="GRU"):
-        super(Discriminator, self).__init__()
+    """
+    Classifies real/fakes seq X (B, T, 43)
+    """
 
+    def __init__(self, input_dim=64, hidden_dim=64, num_layers=1, rnn_type="GRU"):
+        super(Discriminator, self).__init__()
         self.rnn = (
             nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
             if rnn_type == "GRU"
@@ -112,6 +138,13 @@ class Discriminator(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
+        """
+        Forward RNN on X to last h_T (seq summary)
+        Input:
+            x (B, T, 64)
+        Output:
+            logit (B, 1)
+        """
         rnn_out, _ = self.rnn(x)
         out = self.fc(rnn_out[:, -1, :])
         out = self.sigmoid(out)
@@ -120,6 +153,9 @@ class Discriminator(nn.Module):
 
 # Params counter
 def count_params(model):
+    """
+    Counts learnable params.
+    """
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
@@ -133,7 +169,7 @@ if __name__ == "__main__":
 
     r = Recovery()
     x_rec = r(h)
-    print(f"recovery: {x_rec.shape}, params: {count_params(r):,}")
+    print(f"Recovery: {x_rec.shape}, params: {count_params(r):,}")
 
     s = Supervisor()
     pred = s(dummy_x)
