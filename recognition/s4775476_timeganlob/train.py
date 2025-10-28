@@ -4,16 +4,15 @@ TimeGAN training script.
 Created by:     Brandon Loh
 ID:             S47754764
 Last update:    28/10/2025
-
 """
 
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-import os
 from dataset import LOBDataset
 from modules import (
     Embedder,
@@ -24,22 +23,36 @@ from modules import (
     count_params,
 )
 
-# Config
+
+# Global var
+# Run one-epoch quick sanity test locally before long training
+DEBUG_QUICK = True  # Set False for full training on Rangpur
+
+# Experiment configurations (you can add more)
+EXPERIMENTS = [
+    {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
+    # Add more configs for HPC parallel runs:
+    # {"hidden_dim": 32, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
+    # {"hidden_dim": 128, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
+    # {"hidden_dim": 64, "lr": 5e-4, "lambda_sup": 0.1, "batch_size": 32},
+    # {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.3, "batch_size": 32},
+    # {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 64},
+]
+
+SEQ_LEN = 20
+SUP_EPOCHS_FULL = 20  # "pretrain" phase
+ADV_EPOCHS_FULL = 50  # adversarial phase
+MSG_FILE = "AMZN_2012-06-21_34200000_57600000_message_10.csv"
+OB_FILE = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Device:", device)
-SEQ_LEN = 20
-BATCH_SIZE = 32
-SUP_EPOCHS = 20  # "pretrain" phase
-ADV_EPOCHS = 50  # adversarial phase
-LR = 1e-3
-HIDDEN_DIM = 64
-LAMBDA_SUP = 0.1  # weight for supervised latent dynamics loss in G-phase
 
+# BATCH_SIZE = 32
+# LR = 1e-3
+# HIDDEN_DIM = 64
+# LAMBDA_SUP = 0.1 # weight for supervised latent dynamics loss in G-phase
 
-# Dataset
-MSG_FILE = "AMZN_2012-06-21_34200000_57600000_message_10.csv"
-OB_FILE = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
 
 os.makedirs("checkpoints", exist_ok=True)
 os.makedirs("plots", exist_ok=True)
@@ -72,3 +85,58 @@ opt_R = optim.Adam(R.parameters(), lr=LR)
 opt_S = optim.Adam(S.parameters(), lr=LR)
 opt_G = optim.Adam(G.parameters(), lr=LR)
 opt_D = optim.Adam(D.parameters(), lr=LR)
+
+# Losses
+recon_loss_fn = nn.MSELoss()
+sup_loss_fn = nn.MSELoss()
+adv_loss_fn = nn.BCELoss()  # NOTE: using BCELoss since D returns sigmoid probs
+
+# Tracking
+loss_history = {"recon": [], "sup": [], "d_adv": [], "g_adv": []}
+
+# Phase 1: Pretrain E+R (reconstruction) and S (temporal sup)
+print("=== Phase 1: Reconstruction + Supervisor pretraining ===")
+for epoch in range(SUP_EPOCHS):
+    E.train()
+    R.train()
+    S.train()
+    epoch_recon_total = 0.0
+    epoch_sup_total = 0.0
+
+    pbar = tqdm(train_loader, desc=f"Sup Epoch {epoch + 1}/{SUP_EPOCHS}")
+    for x in pbar:
+        x = x.to(device)  # (B,T,43)
+
+        # ---- Reconstruction loss: ||X - R(E(X))||^2
+        h_real = E(x)  # (B,T,64)
+        x_rec = R(h_real)  # (B,T,43)
+        recon_l = recon_loss_fn(x_rec, x)
+
+        opt_E.zero_grad()
+        opt_R.zero_grad()
+        recon_l.backward()
+        opt_E.step()
+        opt_R.step()
+
+        # ---- Supervised temporal loss:
+        # S(x) should approximate future latent state of E(x)
+        # S(x) -> (B,T-1,64)
+        h_pred_next = S(x)  # predicted latent for t+1
+        h_target = h_real[:, 1:, :]  # actual latent at t+1
+        sup_l = sup_loss_fn(h_pred_next, h_target)
+
+        opt_S.zero_grad()
+        sup_l.backward()
+        opt_S.step()
+
+        epoch_recon_total += recon_l.item()
+        epoch_sup_total += sup_l.item()
+
+        pbar.set_postfix({"recon": f"{recon_l:.4f}", "sup": f"{sup_l:.4f}"})
+
+    avg_recon = epoch_recon_total / len(train_loader)
+    avg_sup = epoch_sup_total / len(train_loader)
+    loss_history["recon"].append(avg_recon)
+    loss_history["sup"].append(avg_sup)
+
+    print(f"[Phase1][Epoch {epoch + 1}] recon={avg_recon:.4f}  sup={avg_sup:.4f}")
