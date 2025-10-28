@@ -22,7 +22,7 @@ from modules import (
     Discriminator,
     count_params,
 )
-
+import time
 
 # Global var
 # Run one-epoch quick sanity test locally before long training
@@ -59,8 +59,12 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     print(f"Epochs: {SUP_EPOCHS} (Phase1) + {ADV_EPOCHS} (Phase2)")
 
     # Datasets
-    train_ds = LOBDataset(MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=True, val_split=0.1)
-    val_ds = LOBDataset(MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=False, val_split=0.1)
+    train_ds = LOBDataset(
+        MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=True, val_split=0.1, verbose=False
+    )
+    val_ds = LOBDataset(
+        MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=False, val_split=0.1, verbose=False
+    )
 
     train_loader = DataLoader(
         train_ds, batch_size=BATCH_SIZE, shuffle=True, drop_last=True
@@ -238,6 +242,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
 
 # Run Experiments
 for exp in EXPERIMENTS:
+    start = time.time()
     HIDDEN_DIM = exp["hidden_dim"]
     LR = exp["lr"]
     LAMBDA_SUP = exp["lambda_sup"]
@@ -247,3 +252,4 @@ for exp in EXPERIMENTS:
 
     tag = f"hid{HIDDEN_DIM}_lr{LR}_sup{LAMBDA_SUP}_bs{BATCH_SIZE}"
     train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS, tag)
+    print(f"[DONE] {tag} finished in {(time.time() - start) / 60:.2f} min")
