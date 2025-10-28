@@ -102,20 +102,19 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     loss_history = {"recon": [], "sup": [], "d_adv": [], "g_adv": []}
 
 
-# Phase 1: Supervised Pretrain E+R (reconstruction) and S (temporal sup)
-print("=== Phase 1: Reconstruction + Supervisor pretraining ===")
+# Phase 1: Supervised Pretrain (E+R (reconstruction) and S (temporal sup))
+print("--- Phase 1: Reconstruction + Supervisor pretraining ---")
 for epoch in range(SUP_EPOCHS):
     E.train()
     R.train()
     S.train()
-    epoch_recon_total = 0.0
-    epoch_sup_total = 0.0
+    epoch_recon_total, epoch_sup_total = 0, 0
 
     pbar = tqdm(train_loader, desc=f"Sup Epoch {epoch + 1}/{SUP_EPOCHS}")
     for x in pbar:
         x = x.to(device)  # (B,T,43)
 
-        # ---- Reconstruction loss: ||X - R(E(X))||^2
+        # Reconstruction: E => R => X_rec_hat
         h_real = E(x)  # (B,T,64)
         x_rec = R(h_real)  # (B,T,43)
         recon_l = recon_loss_fn(x_rec, x)
@@ -126,8 +125,7 @@ for epoch in range(SUP_EPOCHS):
         opt_E.step()
         opt_R.step()
 
-        # ---- Supervised temporal loss:
-        # S(x) should approximate future latent state of E(x)
+        # Supervisor:S predicts future latent state of E(x)d
         # S(x) -> (B,T-1,64)
         h_pred_next = S(x)  # predicted latent for t+1
         h_target = h_real[:, 1:, :]  # actual latent at t+1
@@ -139,7 +137,6 @@ for epoch in range(SUP_EPOCHS):
 
         epoch_recon_total += recon_l.item()
         epoch_sup_total += sup_l.item()
-
         pbar.set_postfix({"recon": f"{recon_l:.4f}", "sup": f"{sup_l:.4f}"})
 
     avg_recon = epoch_recon_total / len(train_loader)
