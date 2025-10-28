@@ -26,7 +26,7 @@ from modules import (
 
 # Global var
 # Run one-epoch quick sanity test locally before long training
-DEBUG_QUICK = True  # Set False for full training on Rangpur
+DEBUG_QUICK = True  # Set False (full training)
 
 # Experiment configurations (you can add more)
 EXPERIMENTS = [
@@ -54,7 +54,7 @@ os.makedirs("plots", exist_ok=True)
 
 # Training function
 def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS, TAGS):
-    print(f"\n--- Running Experiment {TAG} ---")
+    print(f"\n--- Running Experiment {TAGS} ---")
     print(f"hidden_dim={HIDDEN_DIM}, lr={LR}, λ_sup={LAMBDA_SUP}, batch={BATCH_SIZE}")
     print(f"Epochs: {SUP_EPOCHS} (Phase1) + {ADV_EPOCHS} (Phase2)")
 
@@ -127,7 +127,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             # Supervisor:S predicts future latent state of E(x)d
             # S(x) -> (B,T-1,64)
             h_pred_next = S(x)  # predicted latent for t+1
-            h_target = h_real[:, 1:, :]  # actual latent at t+1
+            h_target = h_real.detach()[:, 1:, :]  # actual latent at t+1
             sup_l = sup_loss_fn(h_pred_next, h_target)
 
             opt_S.zero_grad()
@@ -158,26 +158,32 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
         pbar = tqdm(train_loader, desc=f"Adv Epoch {epoch + 1}/{ADV_EPOCHS}")
         for x in pbar:
             x = x.to(device)
-            h_real = E(x)
+            h_real = E(x).detach()
             z = torch.randn(x.size(0), SEQ_LEN, HIDDEN_DIM, device=device)
-            h_fake = G(z)
+            h_fake = G(z).detach()
 
             # Discriminator
             real_lbl = torch.ones(x.size(0), 1, device=device)
             fake_lbl = torch.zeros(x.size(0), 1, device=device)
+
             d_real = D(h_real)
-            d_fake = D(h_fake.detach())
+            d_fake = D(h_fake)
             d_loss = adv_loss_fn(d_real, real_lbl) + adv_loss_fn(d_fake, fake_lbl)
             opt_D.zero_grad()
             d_loss.backward()
             opt_D.step()
 
             # Generator
+            z = torch.randn(x.size(0), SEQ_LEN, HIDDEN_DIM, device=device)
+            h_fake = G(z)
             d_fake_for_g = D(h_fake)
             g_adv_loss = adv_loss_fn(d_fake_for_g, real_lbl)
+
+            # temporal supervision consistency
             h_fake_next_pred = S(x)
-            h_real_next = h_real[:, 1:, :]
+            h_real_next = h_real[:, 1:, :]  #  h_real already detached above
             sup_consistency = sup_loss_fn(h_fake_next_pred, h_real_next)
+
             g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency
             opt_G.zero_grad()
             g_total_loss.backward()
@@ -192,3 +198,52 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
         print(
             f"[Phase2][Epoch {epoch + 1}] D={loss_history['d_adv'][-1]:.4f} G={loss_history['g_adv'][-1]:.4f}"
         )
+    # Validation snapshot
+    val_recon, val_sup = 0, 0
+    E.eval()
+    R.eval()
+    S.eval()
+    with torch.no_grad():
+        for v_x in val_loader:
+            v_x = v_x.to(device)
+            v_h = E(v_x)
+            v_x_rec = R(v_h)
+            val_recon += recon_loss_fn(v_x_rec, v_x).item()
+            v_pred = S(v_x)
+            val_sup += sup_loss_fn(v_pred, v_h[:, 1:, :]).item()
+    print(
+        f"Validation → Recon={val_recon / len(val_loader):.4f}, Sup={val_sup / len(val_loader):.4f}"
+    )
+
+    # Save checkpoints & plots
+    torch.save(
+        {k: m.state_dict() for k, m in models.items()},
+        f"checkpoints/timegan_{TAGS}.pth",
+    )
+    plt.figure(figsize=(10, 6))
+    plt.plot(loss_history["recon"], label="Recon")
+    plt.plot(loss_history["sup"], label="Sup")
+    plt.plot(loss_history["d_adv"], label="D_adv")
+    plt.plot(loss_history["g_adv"], label="G_adv")
+    plt.legend()
+    plt.grid(True)
+    plt.title(f"Losses - {TAGS}")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.tight_layout()
+    plt.savefig(f"plots/losses_{TAGS}.png", dpi=150)
+    # plt.show()
+    print(f"Saved model and plot for {TAGS}\n")
+
+
+# Run Experiments
+for exp in EXPERIMENTS:
+    HIDDEN_DIM = exp["hidden_dim"]
+    LR = exp["lr"]
+    LAMBDA_SUP = exp["lambda_sup"]
+    BATCH_SIZE = exp["batch_size"]
+    SUP_EPOCHS = 1 if DEBUG_QUICK else SUP_EPOCHS_FULL
+    ADV_EPOCHS = 1 if DEBUG_QUICK else ADV_EPOCHS_FULL
+
+    tag = f"hid{HIDDEN_DIM}_lr{LR}_sup{LAMBDA_SUP}_bs{BATCH_SIZE}"
+    train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS, tag)
