@@ -59,12 +59,8 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     print(f"Epochs: {SUP_EPOCHS} (Phase1) + {ADV_EPOCHS} (Phase2)")
 
     # Datasets
-    train_ds = LOBDataset(
-        MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=True, val_split=0.1, verbose=False
-    )
-    val_ds = LOBDataset(
-        MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=False, val_split=0.1, verbose=False
-    )
+    train_ds = LOBDataset(MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=True, val_split=0.1)
+    val_ds = LOBDataset(MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=False, val_split=0.1)
 
     train_loader = DataLoader(
         train_ds, batch_size=BATCH_SIZE, shuffle=True, drop_last=True
