@@ -74,14 +74,16 @@ class Recovery(nn.Module):
 
 class Supervisor(nn.Module):
     """
-    Predicts the next-step latent state H_{t+1} given H_t, enforcing
-    temporal consistency in latent space. Used for supervised loss L_sup.
+    Input:
+        x (B, T, 43) – raw LOB feature sequence
+    Output:
+        h_pred_next (B, T-1, 64) – predicted next-step latent embedding
 
-    Args:
-        feature_dim (int): Input feature dimension (default = 43).
-        hidden_dim  (int): Latent feature dimension (default = 64).
-        num_layers  (int): Number of RNN layers (default = 1).
-        rnn_type    (str): 'GRU' or 'LSTM' (default = 'GRU').
+    Notes:
+        This implementation predicts future latent representation (E(x_{t+1}))
+        based on current observed features (x_t). This differs slightly from the
+        original TimeGAN, where S operates entirely in latent space, but the
+        objective remains equivalent for temporal supervision.
     """
 
     def __init__(self, feature_dim=43, hidden_dim=64, num_layers=1, rnn_type="GRU"):
@@ -96,8 +98,11 @@ class Supervisor(nn.Module):
 
     def forward(self, x):
         """
-        Input:  H (B, T, 64)
-        Output: Ĥ (B, T-1, 64)
+        Forward pass.
+        Args:
+            x (Tensor): Input raw sequence (B, T, 43)
+        Returns:
+            Tensor: Predicted next-step latent embedding (B, T-1, 64)
         """
         rnn_out, _ = self.rnn(x)
         out = self.fc(rnn_out)
