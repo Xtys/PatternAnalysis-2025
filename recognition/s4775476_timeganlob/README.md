@@ -1,13 +1,16 @@
-# Synthetic LOB Sequence Generation using TimeGAN
+# Synthetic Limit Order Book (LOB) Sequence Generation using TimeGAN
 
 Abstract
 ---
-This report presents a baseline implementation and evaluation of TimeGAN for synthetic Limit Order Book (LOB) sequence generation.
-The goal was to reproduce temporal and structural patterns of high-frequency market data using adversarial training on latent time-series features.
-The baseline model was trained and evaluated according to the specification metrics — KL divergence ≤ 0.1 and SSIM > 0.6 — using held-out test data.
+This project explores the application of TimeGAN, a generative adversarial network for sequential data, to the synthesis of Limit Order Book (LOB) time-series. The goal is to generate synthetic market microstructure data that preserves the temporal dependencies and statistical characteristics of real financial order flows.
 
-While the generator captured overall temporal correlations, it failed to generalize across the full distribution of market states. The results showed high KL divergence, low SSIM, and discriminator overfitting (accuracy = 1.0), indicating mode collapse and loss of depth variability.
-These findings highlight the limitations of the base model and motivate the next phase of improvement through kurtosis-aware loss functions and Optuna-driven hyperparameter optimization, aimed at improving distribution fidelity and model stability.
+Financial time-series data such as LOB messages and order depths are inherently non-stationary, noisy, and highly dynamic. Traditional GANs struggle to capture such temporal dependencies, leading to unstable outputs. TimeGAN combines recurrent dynamics with adversarial learning, allowing both reconstruction-based and generation-based consistency within latent space.
+
+The dataset used in this project comes from the LOBSTER feed for AMZN (June 21, 2012), consisting of message and order-book pairs. Each input sequence has 20 time steps and 43 engineered features, including bid/ask relative prices, log-volumes, and derived features such as spread, mid-price return, and order imbalance.
+
+This report presents the baseline implementation and evaluation of the TimeGAN model, trained using a two-phase approach: (1) reconstruction and supervised pretraining, and (2) adversarial refinement. The generated synthetic sequences are assessed against held-out test data using the evaluation metrics defined in the task specification — KL divergence (≤ 0.1), Structural Similarity Index (SSIM > 0.6), and discriminator accuracy (~0.5).
+
+Initial results show that the model effectively reproduces broad temporal structures but fails to generalize over distributional diversity. This outcome motivates the next stage of development: integrating a kurtosis-based proxy to better capture heavy-tail behaviour, and applying Optuna for systematic hyperparameter tuning to improve model stability and realism.
 
 Introduction
 ---
