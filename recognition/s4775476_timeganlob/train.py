@@ -180,7 +180,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             # Train Generator
             z = torch.randn(batch_size, SEQ_LEN, HIDDEN_DIM, device=device)
             h_fake = G(z)
-            d_fake_g = S(h_fake)  # Define for adv_loss
+            d_fake_g = D(h_fake)  # Use discriminator for adv_loss
             g_adv_loss = adv_loss_fn(d_fake_g, real_lbl)
 
             h_fake_pred = S(h_fake)  # Latent self-sup (B,T-1,64)
@@ -196,7 +196,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             mom_loss = F.mse_loss(synth_mean, real_mean) + F.mse_loss(
                 synth_var, real_var
             )
-            g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency + 10 * mom_loss
+            g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency + 5 * mom_loss
 
             opt_G.zero_grad()
             g_total_loss.backward()
