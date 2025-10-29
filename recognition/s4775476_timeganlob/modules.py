@@ -74,37 +74,24 @@ class Recovery(nn.Module):
 
 class Supervisor(nn.Module):
     """
-    Input:
-        x (B, T, 43) – raw LOB feature sequence
-    Output:
-        h_pred_next (B, T-1, 64) – predicted next-step latent embedding
-
-    Notes:
-        This implementation predicts future latent representation (E(x_{t+1}))
-        based on current observed features (x_t). This differs slightly from the
-        original TimeGAN, where S operates entirely in latent space, but the
-        objective remains equivalent for temporal supervision.
+    Predicts next latent H_t+1 given H_t (autoregressive)
     """
 
-    def __init__(self, feature_dim=43, hidden_dim=64, num_layers=1, rnn_type="GRU"):
+    def __init__(self, input_dim=64, hidden_dim=64, num_layers=1, rnn_type="GRU"):
         super(Supervisor, self).__init__()
         self.rnn = (
-            nn.GRU(feature_dim, hidden_dim, num_layers, batch_first=True)
+            nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
             if rnn_type == "GRU"
-            else nn.LSTM(feature_dim, hidden_dim, num_layers, batch_first=True)
+            else nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
         )
         self.fc = nn.Linear(hidden_dim, hidden_dim)
         self.tanh = nn.Tanh()
 
-    def forward(self, x):
+    def forward(self, h):
         """
         Forward pass.
-        Args:
-            x (Tensor): Input raw sequence (B, T, 43)
-        Returns:
-            Tensor: Predicted next-step latent embedding (B, T-1, 64)
         """
-        rnn_out, _ = self.rnn(x)
+        rnn_out, _ = self.rnn(h)
         out = self.fc(rnn_out)
         out = self.tanh(out)
         # Shifted (B, T-1, hidden_dim) for autoregressive

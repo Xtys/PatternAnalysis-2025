@@ -27,16 +27,16 @@ import time
 # Global var
 # Run one-epoch quick sanity test locally before long training
 # Set False for full training, other wise True.
-DEBUG_QUICK = False
+DEBUG_QUICK = True
 
 # Experiment configurations (you can add more)
 EXPERIMENTS = [
     {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    {"hidden_dim": 32, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    {"hidden_dim": 128, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    {"hidden_dim": 64, "lr": 5e-4, "lambda_sup": 0.1, "batch_size": 32},
-    {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.3, "batch_size": 32},
-    {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 64},
+    # {"hidden_dim": 32, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
+    # {"hidden_dim": 128, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
+    # {"hidden_dim": 64, "lr": 5e-4, "lambda_sup": 0.1, "batch_size": 32},
+    # {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.3, "batch_size": 32},
+    # {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 64},
 ]
 
 SEQ_LEN = 20
@@ -76,7 +76,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     # Models
     E = Embedder(input_dim=43, hidden_dim=HIDDEN_DIM).to(device)
     R = Recovery(hidden_dim=HIDDEN_DIM, output_dim=43).to(device)
-    S = Supervisor(feature_dim=43, hidden_dim=HIDDEN_DIM).to(device)
+    S = Supervisor(input_dim=HIDDEN_DIM, hidden_dim=HIDDEN_DIM).to(device)
     G = Generator(hidden_dim=HIDDEN_DIM, output_dim=HIDDEN_DIM).to(device)  # Latent Ĥ
     D = Discriminator(input_dim=HIDDEN_DIM, hidden_dim=HIDDEN_DIM).to(
         device
@@ -125,8 +125,8 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             opt_R.step()
 
             # Supervisor:S predicts future latent state of E(x)d
-            # S(x) -> (B,T-1,64)
-            h_pred_next = S(x)  # predicted latent for t+1
+            h_real = E(x)  # Already computed—reuse
+            h_pred_next = S(h_real)
             h_target = h_real.detach()[:, 1:, :]  # actual latent at t+1
             sup_l = sup_loss_fn(h_pred_next, h_target)
 
@@ -146,7 +146,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
         print(f"[Phase1][Epoch {epoch + 1}] recon={avg_recon:.4f}  sup={avg_sup:.4f}")
 
     # phase 2: Adversarial Training
-    print("=== Phase 2: Adversarial training ===")
+    print("--- Phase 2: Adversarial training ---")
     for epoch in range(ADV_EPOCHS):
         E.train()
         R.train()
@@ -176,13 +176,12 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             # Generator
             z = torch.randn(x.size(0), SEQ_LEN, HIDDEN_DIM, device=device)
             h_fake = G(z)
-            d_fake_for_g = D(h_fake)
+            h_fake_pred = S(h_fake)  # S(Ĥ) → pred (B,T-1,64)
+            h_fake_target = h_fake[:, 1:, :]
             g_adv_loss = adv_loss_fn(d_fake_for_g, real_lbl)
 
             # temporal supervision consistency
-            h_fake_next_pred = S(x)
-            h_real_next = h_real[:, 1:, :]  #  h_real already detached above
-            sup_consistency = sup_loss_fn(h_fake_next_pred, h_real_next)
+            sup_consistency = sup_loss_fn(h_fake_pred, h_fake_target)
 
             g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency
             opt_G.zero_grad()
