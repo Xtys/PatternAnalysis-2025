@@ -100,7 +100,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     adv_loss_fn = nn.BCELoss()
 
     # Tracking
-    loss_history = {"recon": [], "sup": [], "d_adv": [], "g_adv": []}
+    loss_history = {"recon": [], "sup10": [], "d_adv": [], "g_adv": []}
 
     # Phase 1: Supervised Pretrain (E+R (reconstruction) and S (temporal sup))
     print("--- Phase 1: Reconstruction + Supervisor pretraining ---")
