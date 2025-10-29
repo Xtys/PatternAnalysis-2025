@@ -14,31 +14,36 @@ Model Architecture
 ---
 The architecture of this project follows the TimeGAN framework [1], combining autoencoding, supervised prediction, and adversarial generation to model temporal dependencies in LOB sequences. The network consists of five key modules: Embedder (E), Recovery (R), Supervisor (S), Generator (G), and Discriminator (D), all implemented using GRU layers for efficiency and temporal stability. The latent dimension is set to $d_h = 64$, resulting in approximately 136,000 trainable parameters across all components.
 
-1. **Embedder (E)**: The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation:
+1. **Embedder (E)**:
+The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation:
 
     - $H_t = \tanh(W_h \cdot \text{GRU}(X_t; \theta_E) + b_h), \quad t = 1, \dots, T$
 
     where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
 
-2. **Recovery (R)**: The Recovery module decodes the latent $H$ back to the feature space via a GRU and linear projection, producing reconstructed sequences $\hat{X} \in \mathbb{R}^{B \times T \times d_x}$:
+2. **Recovery (R)**:
+The Recovery module decodes the latent $H$ back to the feature space via a GRU and linear projection, producing reconstructed sequences $\hat{X} \in \mathbb{R}^{B \times T \times d_x}$:
 
     - $\hat{X}_t = W_x \cdot \text{GRU}(H_t; \theta_R) + b_x, \quad t = 1, \dots, T$
 
     where $\theta_R$ are the GRU parameters, and $W_x, b_x$ project to the output dimension. It enforces reconstruction fidelity during pretraining via $\mathcal{L}_{recon} = \| X - \hat{X} \|^2_2$.
 
-3. **Supervisor (S)**: An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1}$ from $H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$:
+3. **Supervisor (S)**:
+An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1}$ from $H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$:
 
     - $\hat{H}_t = \tanh(W_s \cdot \text{GRU}(H_t; \theta_S) + b_s), \quad t = 1, \dots, T-1$
 
     where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via  $\mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2$ .
 
-4. **Generator (G)**: Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
+4. **Generator (G)**:
+Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
     - $\hat{H}_t = \tanh(W_g \cdot \text{GRU}(Z_t; \theta_G) + b_g), \quad t = 1, \dots, T$
 
     where $\theta_G$ are the GRU parameters, and $W_g, b_g$ project. Composed with S and R, it yields full synthetic sequences $\tilde{X} = R(S(G(Z)))$.
 
-5. **Discriminator (D)**: A GRU classifier that distinguishes real latents $H = E(X)$ from synthetic $\hat{H}$, outputting a scalar probability $p \in [0,1]$ via sigmoid:
+5. **Discriminator (D)**:
+A GRU classifier that distinguishes real latents $H = E(X)$ from synthetic $\hat{H}$, outputting a scalar probability $p \in [0,1]$ via sigmoid:
 
     - $p = \sigma(W_d \cdot \text{GRU}(H_T; \theta_D) + b_d)$
 
@@ -64,6 +69,7 @@ Model
 ---
 We implement the TimeGAN model as a sequence-to-sequence generative adversarial network tailored for LOB data. It operates in a two-phase training regime to disentangle temporal dynamics from distributional fidelity. In Phase 1, the autoencoder components (Embedder and Recovery) are pretrained to reconstruct input sequences, while the Supervisor learns autoregressive transitions in the latent space. This establishes a foundational representation capable of capturing short-term dependencies in high-frequency market snapshots.
 
+The latent space (dimension 64) serves as a bottleneck for information flow, compressing the 43-dimensional feature vectors while retaining temporal structure through GRU hidden states. Each GRU module employs a single layer with batch-first processing, this way is more efficient in handling the variable-length sequences (fixed at T=20 here). The tanh activations in Embedder, Supervisor, and Generator bound outputs to [-1,1], normalizing inputs and promoting stable gradient flow during backpropagation.
 
 
 Training Procedure
