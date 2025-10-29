@@ -2,23 +2,26 @@
 
 Abstract
 ---
-This project explores the application of TimeGAN, a generative adversarial network for sequential data, to the synthesis of Limit Order Book (LOB) time-series. The goal is to generate synthetic market microstructure data that preserves the temporal dependencies and statistical characteristics of real financial order flows.
+This project focuses on generating synthetic Limit Order Book (LOB) sequences using TimeGAN, a model that combines recurrent and adversarial learning to capture both temporal and statistical properties of sequential data. The objective is to produce realistic synthetic LOB data that resembles actual market dynamics, particularly in mid-price returns, spread, and order imbalance.
 
-Financial time-series data such as LOB messages and order depths are inherently non-stationary, noisy, and highly dynamic. Traditional GANs struggle to capture such temporal dependencies, leading to unstable outputs. TimeGAN combines recurrent dynamics with adversarial learning, allowing both reconstruction-based and generation-based consistency within latent space.
+The dataset used is the LOBSTER feed for AMZN (2012), processed into 20-step sequences with 43 engineered features including relative prices, log volumes, and derived market indicators. The training follows a two-phase structure: Phase 1 for reconstruction and supervised consistency, and Phase 2 for adversarial fine-tuning.
 
-The dataset used in this project comes from the LOBSTER feed for AMZN (June 21, 2012), consisting of message and order-book pairs. Each input sequence has 20 time steps and 43 engineered features, including bid/ask relative prices, log-volumes, and derived features such as spread, mid-price return, and order imbalance.
+Evaluation is based on the task specification metrics: KL divergence (≤ 0.1), SSIM (> 0.6), and discriminator accuracy (~0.5). The baseline model was able to learn temporal relationships but struggled to replicate the true distributional shape, leading to high discriminator accuracy and poor SSIM scores.
 
-This report presents the baseline implementation and evaluation of the TimeGAN model, trained using a two-phase approach: (1) reconstruction and supervised pretraining, and (2) adversarial refinement. The generated synthetic sequences are assessed against held-out test data using the evaluation metrics defined in the task specification — KL divergence (≤ 0.1), Structural Similarity Index (SSIM > 0.6), and discriminator accuracy (~0.5).
+These findings highlight the need for further tuning. In the next stage, the model will integrate a kurtosis-based proxy loss to better represent tail behaviour and employ Optuna for hyperparameter optimization to improve stability and generalization.
 
-Initial results show that the model effectively reproduces broad temporal structures but fails to generalize over distributional diversity. This outcome motivates the next stage of development: integrating a kurtosis-based proxy to better capture heavy-tail behaviour, and applying Optuna for systematic hyperparameter tuning to improve model stability and realism.
-
-Introduction
+Dataset loading and Preprocessing
 ---
-This work investigates the use of TimeGAN for generating realistic Limit Order Book (LOB) sequences.
-The objective is to reproduce temporal and structural properties of real market data. This includes spread, mid-price returns, and depth imbalance — while maintaining distribution similarity.
+The Limit Order Book (LOB) represents the full state of market supply and demand through continuously updated bid and ask prices with their corresponding volumes. Modeling such data is challenging due to its high frequency, noise, and nonlinear temporal dependencies. Traditional models like ARIMA or simple RNNs often fail to capture these complex microstructure patterns.
 
-The project focuses on the evaluation phase of the TimeGAN pipeline, where generated sequences are compared to real data using metrics defined in the specification:
+In this project, data is sourced from the LOBSTER dataset for Amazon (AMZN) on June 21, 2012, covering the trading interval from 09:30:00 to 16:00:00. The raw message and order-book files were processed into synchronized snapshots using a custom dataset pipeline (dataset.py).
 
-- KL divergence ≤ 0.1 between real and synthetic spread and mid-return distributions.
-- SSIM > 0.6 on LOB depth heatmaps.
-- Discriminator accuracy ≈ 0.5 for realism balance.
+Each sample is a sequence of 20 timesteps containing 43 standardized features, grouped into four categories:
+
+- Price levels: 20 bid and 20 ask relative prices
+- Volume levels: 20 bid and 20 ask log-transformed sizes
+- Derived indicators: spread, mid-price return, and imbalance
+
+All features are normalized using a StandardScaler and stored for reuse across training and inference. The resulting dataset contains approximately 26,973 total sequences, split into train (70%), validation (10%), and test (20%) sets.
+
+This structured preprocessing enables stable training of TimeGAN while preserving meaningful short-term order flow dynamics within each sequence window.
