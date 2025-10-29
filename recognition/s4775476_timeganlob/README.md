@@ -30,7 +30,7 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
     - $\hat{H}_{t} = \tanh(W_s \cdot \text{GRU}(H_{t}; \theta_S) + b_s)$, $\quad t = 1, \dots, T-1$
 
-    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via $\mathcal{L}_{sup} = \|| \hat{H} - H_{1:T-1} \||^2_2$.
+    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via $\mathcal{L}_{sup}$ = $\|| \hat{H} - H_{1:T-1} \||^2_2$.
 
 4. **Generator (G)**: Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
@@ -38,7 +38,7 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
     where $\theta_G$ are the GRU parameters, and $W_g, b_g$ project. Composed with S and R, it yields full synthetic sequences $\tilde{X} = R(S(G(Z)))$.
 
-5. **Discriminator (D)**: A GRU classifier that distinguishes real latents $H = E(X) $ from synthetic $ \hat{H}$, outputting a scalar probability $p \in [0,1]$ via sigmoid:
+5. **Discriminator (D)**: A GRU classifier that distinguishes real latents $H = E(X)$ from synthetic $\hat{H}$, outputting a scalar probability $p \in [0,1]$ via sigmoid:
 
     - $p = \sigma(W_d \cdot \text{GRU}(H_T; \theta_D) + b_d)$
 
