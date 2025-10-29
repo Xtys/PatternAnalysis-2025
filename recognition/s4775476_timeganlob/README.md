@@ -30,7 +30,7 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
     - $\hat{H}_t = \tanh(W_s \cdot \text{GRU}(H_t; \theta_S) + b_s), \quad t = 1, \dots, T-1$
 
-    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via  $ \mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2 $
+    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via  $\mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2$.
 
 4. **Generator (G)**: Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
@@ -42,7 +42,7 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
     - $p = \sigma(W_d \cdot \text{GRU}(H_T; \theta_D) + b_d)$
 
-  where $\theta_D$ are the GRU parameters, $H_T$ is the final hidden state, and $\sigma$ is the sigmoid. It provides adversarial signals to refine G via binary cross-entropy $\mathcal{L}_{adv} = -\mathbb{E}[\log p(H)] - \mathbb{E}[\log(1 - p(\hat{H}))]$.
+    where $\theta_D$ are the GRU parameters, $H_T$ is the final hidden state, and $\sigma$ is the sigmoid. It provides adversarial signals to refine G via binary cross-entropy $\mathcal{L}_{adv} = -\mathbb{E}[\log p(H)] - \mathbb{E}[\log(1 - p(\hat{H}))]$.
 
 Dataset loading and Preprocessing
 ---
