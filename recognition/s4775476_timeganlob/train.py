@@ -142,7 +142,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
         avg_recon = epoch_recon_total / len(train_loader)
         avg_sup = epoch_sup_total / len(train_loader)
         loss_history["recon"].append(avg_recon)
-        loss_history["sup"].append(avg_sup)
+        loss_history["sup10"].append(avg_sup)
 
         print(f"[Phase1][Epoch {epoch + 1}] recon={avg_recon:.4f}  sup={avg_sup:.4f}")
 
@@ -241,7 +241,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             v_h = E(v_x)
             v_x_rec = R(v_h)
             val_recon += recon_loss_fn(v_x_rec, v_x).item()
-            v_pred = S(v_x)
+            v_pred = S(v_h)  # Supervisor computes in latent space
             val_sup += sup_loss_fn(v_pred, v_h[:, 1:, :]).item()
     print(
         f"Validation → Recon={val_recon / len(val_loader):.4f}, Sup={val_sup / len(val_loader):.4f}"
