@@ -28,11 +28,11 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
 3. **Supervisor (S)**: An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1} $ from $ H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$:
 
-    - $\hat{H}_{t} = \tanh(W_s \cdot \text{GRU}(H_{t}; \theta_S) + b_s), \quad t = 1, \dots, T-1$
+    - $\hat{H}_{t} = \tanh(W_s \cdot \text{GRU}(H_{t}; \theta_S) + b_s)$, $\quad t = 1, \dots, T-1$
 
-where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via $\mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2$.
+where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via $\mathcal{L}_{sup} = \|| \hat{H} - H_{1:T-1} \||^2_2$.
 
-4. Generator (G): Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
+4. **Generator (G)**: Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
 $\hat{H}_t = \tanh(W_g \cdot \text{GRU}(Z_t; \theta_G) + b_g), \quad t = 1, \dots, T$
 
