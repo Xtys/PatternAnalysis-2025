@@ -13,7 +13,7 @@ The baseline model was trained and evaluated according to the specification metr
 While the generator captured overall temporal correlations, it failed to generalize across the full distribution of market states. The results showed high KL divergence, low SSIM, and discriminator overfitting (accuracy = 1.0), indicating mode collapse and loss of depth variability.
 These findings highlight the limitations of the base model and motivate the next phase of improvement through kurtosis-aware loss functions and Optuna-driven hyperparameter optimization, aimed at improving distribution fidelity and model stability.
 
-1. Introduction
+Introduction
 ---
 This work investigates the use of TimeGAN for generating realistic Limit Order Book (LOB) sequences.
 The objective is to reproduce temporal and structural properties of real market data. This includes spread, mid-price returns, and depth imbalance — while maintaining distribution similarity.
@@ -21,7 +21,5 @@ The objective is to reproduce temporal and structural properties of real market 
 The project focuses on the evaluation phase of the TimeGAN pipeline, where generated sequences are compared to real data using metrics defined in the specification:
 
 - KL divergence ≤ 0.1 between real and synthetic spread and mid-return distributions.
-
 - SSIM > 0.6 on LOB depth heatmaps.
-
 - Discriminator accuracy ≈ 0.5 for realism balance.
