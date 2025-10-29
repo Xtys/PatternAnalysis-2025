@@ -28,9 +28,9 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
 3. **Supervisor (S)**: An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1}$ from $H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$:
 
-    - $\hat{H}_t$ = $\tanh(W_s \cdot \text{GRU}(H_{t}; \theta_S) + b_s)$, $\quad t = 1, \dots, T-1$
+    - $\hat{H}_t = \tanh(W_s \cdot \text{GRU}(H_{t}; \theta_S) + b_s)$, $\quad t = 1, \dots, T-1$
 
-    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via $\mathcal{L}_sup$ = $\| \hat{H} - H_{1:T-1} \|^2_2$.
+    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via $\mathcal{L}_sup = \| \hat{H} - H_{1:T-1} \|^2_2$.
 
 4. **Generator (G)**: Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
@@ -53,8 +53,8 @@ In this project, data is sourced from the LOBSTER dataset for Amazon (AMZN) on J
 Each sample is a sequence of 20 timesteps containing 43 standardized features, grouped into four categories:
 
 - Price levels: 20 bid and 20 ask relative prices (ticks from mid-price, scaled by 100).
-- Volume levels: 20 bid and 20 ask log-transformed sizes (log(1 + size) for stability).
-- Derived indicators: Spread (ask1 - bid1, scaled), mid-price return (log(mid_t / mid_{t-1})), and imbalance ((bid1_s - ask1_s) / (bid1_s + ask1_s)).
+- Volume levels: 20 bid and 20 ask log-transformed sizes $(log(1 + size$ for stability).
+- Derived indicators: Spread (ask1 - bid1, scaled), mid-price return $(log(mid_t / mid_{t-1}))$, and imbalance (($bid1_s - ask1_s$) / ($bid1_s + ask1_s$)).
 
 All features are normalized using a StandardScaler and stored for reuse across training and inference. The resulting dataset contains approximately 26,973 total sequences, split into train (70%), validation (10%), and test (20%) sets.
 
