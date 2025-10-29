@@ -1,24 +1,27 @@
-Task 14 – Limit Order Book TimeGAN Project
+Synthetic LOB Sequence Generation using TimeGAN
 
 Student: Brandon Loh Ming Fong
 Student ID: S4775476
 Date: 29 October 2025
 
-1. Project Overview
+Abstract
+---
+This report presents a baseline implementation and evaluation of TimeGAN for synthetic Limit Order Book (LOB) sequence generation.
+The goal was to reproduce temporal and structural patterns of high-frequency market data using adversarial training on latent time-series features.
+The baseline model was trained and evaluated according to the specification metrics — KL divergence ≤ 0.1 and SSIM > 0.6 — using held-out test data.
 
-This project focuses on generating synthetic Limit Order Book (LOB) time-series data using a TimeGAN architecture.
-The work corresponds to Task 14 – Limit Order Book Time Series in the COMP3710 course, where the goal is to model and replicate realistic high-frequency trading sequences that capture temporal and structural market dynamics.
+While the generator captured overall temporal correlations, it failed to generalize across the full distribution of market states. The results showed high KL divergence, low SSIM, and discriminator overfitting (accuracy = 1.0), indicating mode collapse and loss of depth variability.
+These findings highlight the limitations of the base model and motivate the next phase of improvement through kurtosis-aware loss functions and Optuna-driven hyperparameter optimization, aimed at improving distribution fidelity and model stability.
 
-The implemented TimeGAN combines supervised and adversarial learning to generate synthetic sequences that mimic the original LOB data distribution while maintaining temporal consistency.
+1. Introduction
+---
+This work investigates the use of TimeGAN for generating realistic Limit Order Book (LOB) sequences.
+The objective is to reproduce temporal and structural properties of real market data. This includes spread, mid-price returns, and depth imbalance — while maintaining distribution similarity.
 
-2. Objective
+The project focuses on the evaluation phase of the TimeGAN pipeline, where generated sequences are compared to real data using metrics defined in the specification:
 
-The aim of this project is to:
+- KL divergence ≤ 0.1 between real and synthetic spread and mid-return distributions.
 
-Preprocess raw LOBSTER data to obtain normalized, sequential datasets suitable for deep generative modeling.
+- SSIM > 0.6 on LOB depth heatmaps.
 
-Implement a TimeGAN from scratch using PyTorch, following the architecture described in Yoon et al. (2019).
-
-Train and evaluate the model on financial microstructure data to assess the realism of generated sequences.
-
-Provide a modular and reproducible pipeline from preprocessing to training.
+- Discriminator accuracy ≈ 0.5 for realism balance.
