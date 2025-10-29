@@ -20,15 +20,15 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
     where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
 
-2. Recovery (R): The Recovery module decodes the latent $H$ back to the feature space via a GRU and linear projection, producing reconstructed sequences $\hat{X} \in \mathbb{R}^{B \times T \times d_x}$:
+2. **Recovery (R)**: The Recovery module decodes the latent $H$ back to the feature space via a GRU and linear projection, producing reconstructed sequences $\hat{X} \in \mathbb{R}^{B \times T \times d_x}$:
 
-$\hat{X}_t = W_x \cdot \text{GRU}(H_t; \theta_R) + b_x, \quad t = 1, \dots, T$
+    - $\hat{X}_t = W_x \cdot \text{GRU}(H_t; \theta_R) + b_x, \quad t = 1, \dots, T$
 
-where $\theta_R$ are the GRU parameters, and $W_x, b_x$ project to the output dimension. It enforces reconstruction fidelity during pretraining via $\mathcal{L}_{recon} = \| X - \hat{X} \|^2_2$.
+    where $\theta_R$ are the GRU parameters, and $W_x, b_x$ project to the output dimension. It enforces reconstruction fidelity during pretraining via $\mathcal{L}_{recon} = \| X - \hat{X} \|^2_2$.
 
-3. Supervisor (S): An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1} $ from $ H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$:
+3. **Supervisor (S)**: An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1} $ from $ H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$:
 
-$\hat{H}_{t} = \tanh(W_s \cdot \text{GRU}(H_{t}; \theta_S) + b_s), \quad t = 1, \dots, T-1$
+    - $\hat{H}_{t} = \tanh(W_s \cdot \text{GRU}(H_{t}; \theta_S) + b_s), \quad t = 1, \dots, T-1$
 
 where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via $\mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2$.
 
