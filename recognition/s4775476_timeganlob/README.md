@@ -18,25 +18,25 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
 $H_t = \tanh(W_h \cdot \text{GRU}(X_t; \theta_E) + b_h), \quad t = 1, \dots, T$
 
-where $ \theta_E $ denotes the GRU parameters, and $ W_h, b_h $ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
+where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
 
-2. Recovery (R): The Recovery module decodes the latent $ H $ back to the feature space via a GRU and linear projection, producing reconstructed sequences $ \hat{X} \in \mathbb{R}^{B \times T \times d_x} $:
+2. Recovery (R): The Recovery module decodes the latent $H$ back to the feature space via a GRU and linear projection, producing reconstructed sequences $\hat{X} \in \mathbb{R}^{B \times T \times d_x}$:
 
 $\hat{X}_t = W_x \cdot \text{GRU}(H_t; \theta_R) + b_x, \quad t = 1, \dots, T$
 
-where $ \theta_R $ are the GRU parameters, and $ W_x, b_x $ project to the output dimension. It enforces reconstruction fidelity during pretraining via $ \mathcal{L}_{recon} = \| X - \hat{X} \|^2_2 $.
+where $\theta_R$ are the GRU parameters, and $W_x, b_x$ project to the output dimension. It enforces reconstruction fidelity during pretraining via $\mathcal{L}_{recon} = \| X - \hat{X} \|^2_2$.
 
-3. Supervisor (S): An autoregressive GRU-based predictor that forecasts the next latent state $ \hat{H}_{t+1} $ from $ H_t $, outputting $ \hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h} $:
+3. Supervisor (S): An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1} $ from $ H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$:
 
 $\hat{H}_{t} = \tanh(W_s \cdot \text{GRU}(H_{t}; \theta_S) + b_s), \quad t = 1, \dots, T-1$
 
-where $ \theta_S $ are the GRU parameters, and $ W_s, b_s $ are the projection. This promotes temporal consistency via $ \mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2 $.
+where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via $\mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2$.
 
-4. Generator (G): Starting from random noise $ Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I) $, the Generator produces synthetic latents $ \hat{H} \in \mathbb{R}^{B \times T \times d_h} $ via GRU and tanh projection:
+4. Generator (G): Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
 $\hat{H}_t = \tanh(W_g \cdot \text{GRU}(Z_t; \theta_G) + b_g), \quad t = 1, \dots, T$
 
-where $ \theta_G $ are the GRU parameters, and $ W_g, b_g $ project. Composed with S and R, it yields full synthetic sequences $ \tilde{X} = R(S(G(Z))) $.
+where $\theta_G$ are the GRU parameters, and $W_g, b_g$ project. Composed with S and R, it yields full synthetic sequences $\tilde{X} = R(S(G(Z)))$.
 
 5. Discriminator (D): A GRU classifier that distinguishes real latents $ H = E(X) $ from synthetic $ \hat{H} $, outputting a scalar probability $ p \in [0,1] $ via sigmoid:
 
