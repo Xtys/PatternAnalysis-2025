@@ -30,7 +30,7 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
     - $\hat{H}_t = \tanh(W_s \cdot \text{GRU}(H_t; \theta_S) + b_s), \quad t = 1, \dots, T-1$
 
-    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via  $\mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2$.
+    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via  $\mathcal{L}_{sup}=\| \hat{H} - H_{1:T-1} \|^2_2$ .
 
 4. **Generator (G)**: Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
