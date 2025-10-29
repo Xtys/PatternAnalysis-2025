@@ -28,16 +28,16 @@ import torch.nn.functional as F
 # Global var
 # Run one-epoch quick sanity test locally before long training
 # Set False for full training, other wise True.
-DEBUG_QUICK = True
+DEBUG_QUICK = False
 
 # Experiment configurations (you can add more)
 EXPERIMENTS = [
     {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    # {"hidden_dim": 32, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    # {"hidden_dim": 128, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    # {"hidden_dim": 64, "lr": 5e-4, "lambda_sup": 0.1, "batch_size": 32},
-    # {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.3, "batch_size": 32},
-    # {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 64},
+    {"hidden_dim": 32, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
+    {"hidden_dim": 128, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
+    {"hidden_dim": 64, "lr": 5e-4, "lambda_sup": 0.1, "batch_size": 32},
+    {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.3, "batch_size": 32},
+    {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 64},
 ]
 
 SEQ_LEN = 20
@@ -71,8 +71,6 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     )
 
     print(f"Train sequences: {len(train_ds)}, Val sequences: {len(val_ds)}")
-    # example_batch = next(iter(train_loader))
-    # print("Example batch shape:", example_batch.shape)
 
     # Models
     E = Embedder(input_dim=43, hidden_dim=HIDDEN_DIM).to(device)
