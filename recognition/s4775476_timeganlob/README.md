@@ -16,7 +16,7 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
 1. Embedder (E): The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation:
 
-$H_t = \tanh(W_h \cdot \text{GRU}(X_t; \theta_E) + b_h), \quad t = 1, \dots, T$
+    - $H_t = \tanh(W_h \cdot \text{GRU}(X_t; \theta_E) + b_h), \quad t = 1, \dots, T$
 
 where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
 
