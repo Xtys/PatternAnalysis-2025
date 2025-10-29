@@ -1,8 +1,4 @@
-Synthetic LOB Sequence Generation using TimeGAN
-
-Student: Brandon Loh Ming Fong
-Student ID: S4775476
-Date: 29 October 2025
+# Synthetic LOB Sequence Generation using TimeGAN
 
 Abstract
 ---
