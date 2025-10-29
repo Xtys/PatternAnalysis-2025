@@ -10,6 +10,13 @@ Evaluation is based on the task specification metrics: KL divergence (≤ 0.1), 
 
 These findings highlight the need for further tuning. In the next stage, the model will integrate a kurtosis-based proxy loss to better represent tail behaviour and employ Optuna for hyperparameter optimization to improve stability and generalization.
 
+Model Architecture
+---
+The architecture of this project follows the TimeGAN framework [1], combining autoencoding, supervised prediction, and adversarial generation to model temporal dependencies in LOB sequences. The network consists of five key modules: Embedder (E), Recovery (R), Supervisor (S), Generator (G), and Discriminator (D), all implemented using GRU layers for efficiency and temporal stability.
+
+1. Embedder (E)
+The Embedder transforms the input sequence $ X∈RB×T×43 $  into a latent representation
+
 Dataset loading and Preprocessing
 ---
 The Limit Order Book (LOB) represents the full state of market supply and demand through continuously updated bid and ask prices with their corresponding volumes. Modeling such data is challenging due to its high frequency, noise, and nonlinear temporal dependencies. Traditional models like ARIMA or simple RNNs often fail to capture these complex microstructure patterns.
@@ -25,3 +32,13 @@ Each sample is a sequence of 20 timesteps containing 43 standardized features, g
 All features are normalized using a StandardScaler and stored for reuse across training and inference. The resulting dataset contains approximately 26,973 total sequences, split into train (70%), validation (10%), and test (20%) sets.
 
 This structured preprocessing enables stable training of TimeGAN while preserving meaningful short-term order flow dynamics within each sequence window.
+
+
+
+
+
+References
+---
+[1] Yoon, J., Cho, J., & Lee, J. (2019). TimeGAN: A Time-series Generative Adversarial Network. arXiv preprint arXiv:1904.04442.
+
+[2] https://personal.ntu.edu.sg/boan/papers/AAAI24_MarketGAN.pdf
