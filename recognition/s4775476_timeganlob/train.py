@@ -23,6 +23,7 @@ from modules import (
     count_params,
 )
 import time
+import torch.nn.functional as F
 
 # Global var
 # Run one-epoch quick sanity test locally before long training
@@ -156,37 +157,68 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
         epoch_d_total, epoch_g_total = 0, 0
 
         pbar = tqdm(train_loader, desc=f"Adv Epoch {epoch + 1}/{ADV_EPOCHS}")
-        for x in pbar:
+        for batch in pbar:
+            x = batch[0] if isinstance(batch, (list, tuple)) else batch
             x = x.to(device)
-            h_real = E(x).detach()
-            z = torch.randn(x.size(0), SEQ_LEN, HIDDEN_DIM, device=device)
-            h_fake = G(z).detach()
+            batch_size = x.size(0)
 
-            # Discriminator
-            real_lbl = torch.ones(x.size(0), 1, device=device)
-            fake_lbl = torch.zeros(x.size(0), 1, device=device)
+            h_real = E(x).detach()
+            z = torch.randn(batch_size, SEQ_LEN, HIDDEN_DIM, device=device)
+            h_fake_d = G(z).detach()
+
+            # Train Discriminator
+            real_lbl = torch.ones(batch_size, 1, device=device)
+            fake_lbl = torch.zeros(batch_size, 1, device=device)
 
             d_real = D(h_real)
-            d_fake = D(h_fake)
+            d_fake = D(h_fake_d)
             d_loss = adv_loss_fn(d_real, real_lbl) + adv_loss_fn(d_fake, fake_lbl)
             opt_D.zero_grad()
             d_loss.backward()
             opt_D.step()
 
-            # Generator
-            z = torch.randn(x.size(0), SEQ_LEN, HIDDEN_DIM, device=device)
+            # Train Generator
+            z = torch.randn(batch_size, SEQ_LEN, HIDDEN_DIM, device=device)
             h_fake = G(z)
-            h_fake_pred = S(h_fake)  # S(Ĥ) → pred (B,T-1,64)
-            h_fake_target = h_fake[:, 1:, :]
-            g_adv_loss = adv_loss_fn(d_fake_for_g, real_lbl)
+            d_fake_g = S(h_fake)  # Define for adv_loss
+            g_adv_loss = adv_loss_fn(d_fake_g, real_lbl)
 
-            # temporal supervision consistency
+            h_fake_pred = S(h_fake)  # Latent self-sup (B,T-1,64)
+            h_fake_target = h_fake[:, 1:, :]
             sup_consistency = sup_loss_fn(h_fake_pred, h_fake_target)
 
-            g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency
+            x_synth = R(h_fake)  # Temp for moments (B,T,43)
+            with torch.no_grad():
+                real_mean = x.mean(dim=1).mean(dim=0, keepdim=True)  # (1,43)
+                real_var = x.var(dim=1).mean(dim=0, keepdim=True)
+            synth_mean = x_synth.mean(dim=1).mean(dim=0, keepdim=True)
+            synth_var = x_synth.var(dim=1).mean(dim=0, keepdim=True)
+            mom_loss = F.mse_loss(synth_mean, real_mean) + F.mse_loss(
+                synth_var, real_var
+            )
+            g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency + 10 * mom_loss
+
             opt_G.zero_grad()
             g_total_loss.backward()
             opt_G.step()
+
+            # Joint train E/R/S on real
+            h = E(x)
+            h_sup = S(h)  # (B,T-1,64)
+            h_sup_full = torch.cat([h_sup, h[:, -1:, :]], dim=1)  # Pad to T
+            x_tilde = R(h_sup_full)
+            recon_sup_l = recon_loss_fn(x_tilde, x)
+            h_pred_real = S(h)
+            h_target_real = h[:, 1:, :]
+            sup_real_l = sup_loss_fn(h_pred_real, h_target_real)
+            e_r_s_loss = recon_sup_l + 0.1 * sup_real_l  # Light sup weight
+            opt_E.zero_grad()
+            opt_R.zero_grad()
+            opt_S.zero_grad()
+            e_r_s_loss.backward()
+            opt_E.step()
+            opt_R.step()
+            opt_S.step()
 
             epoch_d_total += d_loss.item()
             epoch_g_total += g_total_loss.item()
@@ -197,6 +229,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
         print(
             f"[Phase2][Epoch {epoch + 1}] D={loss_history['d_adv'][-1]:.4f} G={loss_history['g_adv'][-1]:.4f}"
         )
+
     # Validation snapshot
     val_recon, val_sup = 0, 0
     E.eval()
