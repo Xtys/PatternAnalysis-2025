@@ -38,11 +38,11 @@ $\hat{H}_t = \tanh(W_g \cdot \text{GRU}(Z_t; \theta_G) + b_g), \quad t = 1, \dot
 
 where $\theta_G$ are the GRU parameters, and $W_g, b_g$ project. Composed with S and R, it yields full synthetic sequences $\tilde{X} = R(S(G(Z)))$.
 
-5. Discriminator (D): A GRU classifier that distinguishes real latents $ H = E(X) $ from synthetic $ \hat{H} $, outputting a scalar probability $ p \in [0,1] $ via sigmoid:
+5. Discriminator (D): A GRU classifier that distinguishes real latents $H = E(X) $ from synthetic $ \hat{H}$, outputting a scalar probability $p \in [0,1]$ via sigmoid:
 
 $p = \sigma(W_d \cdot \text{GRU}(H_T; \theta_D) + b_d)$
 
-where $ \theta_D $ are the GRU parameters, $ H_T $ is the final hidden state, and $ \sigma $ is the sigmoid. It provides adversarial signals to refine G via binary cross-entropy $ \mathcal{L}_{adv} = -\mathbb{E}[\log p(H)] - \mathbb{E}[\log(1 - p(\hat{H}))] $.
+where $\theta_D$ are the GRU parameters, $H_T$ is the final hidden state, and $\sigma$ is the sigmoid. It provides adversarial signals to refine G via binary cross-entropy $\mathcal{L}_{adv} = -\mathbb{E}[\log p(H)] - \mathbb{E}[\log(1 - p(\hat{H}))]$.
 
 Dataset loading and Preprocessing
 ---
