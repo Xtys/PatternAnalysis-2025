@@ -30,7 +30,7 @@ The architecture of this project follows the TimeGAN framework [1], combining au
 
     - $\hat{H}_t = \tanh(W_s \cdot \text{GRU}(H_t; \theta_S) + b_s), \quad t = 1, \dots, T-1$
 
-    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via  $\mathcal{L}_{sup}=\| \hat{H} - H_{1:T-1} \|^2_2$ .
+    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via  $\mathcal{L}_{sup} = \| \hat{H} - H_{1:T-1} \|^2_2$ .
 
 4. **Generator (G)**: Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
@@ -59,6 +59,12 @@ Each sample is a sequence of 20 timesteps containing 43 standardized features, g
 All features are normalized using a StandardScaler and stored for reuse across training and inference. The resulting dataset contains approximately 26,973 total sequences, split into train (70%), validation (10%), and test (20%) sets.
 
 This structured preprocessing enables stable training of TimeGAN while preserving meaningful short-term order flow dynamics within each sequence window.
+
+Model
+---
+We implement the TimeGAN model as a sequence-to-sequence generative adversarial network tailored for LOB data. It operates in a two-phase training regime to disentangle temporal dynamics from distributional fidelity. In Phase 1, the autoencoder components (Embedder and Recovery) are pretrained to reconstruct input sequences, while the Supervisor learns autoregressive transitions in the latent space. This establishes a foundational representation capable of capturing short-term dependencies in high-frequency market snapshots.
+
+
 
 Training Procedure
 ---
