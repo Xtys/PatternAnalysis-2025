@@ -25,6 +25,10 @@ from modules import (
 import time
 import torch.nn.functional as F
 
+# improvement test
+from utils import objective
+import argparse
+
 # Global var
 # Run one-epoch quick sanity test locally before long training
 # Set False for full training, other wise True.
@@ -54,9 +58,21 @@ os.makedirs("plots", exist_ok=True)
 
 
 # Training function
-def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS, TAGS):
+def train_single(
+    HIDDEN_DIM,
+    LR,
+    LAMBDA_SUP,
+    BATCH_SIZE,
+    SUP_EPOCHS,
+    ADV_EPOCHS,
+    TAGS,
+    mom_w=1.0,
+    kurt_w=5.0,
+):
     print(f"\n--- Running Experiment {TAGS} ---")
-    print(f"hidden_dim={HIDDEN_DIM}, lr={LR}, λ_sup={LAMBDA_SUP}, batch={BATCH_SIZE}")
+    print(
+        f"hidden_dim={HIDDEN_DIM}, lr={LR}, λ_sup={LAMBDA_SUP}, batch={BATCH_SIZE}, mom_w={mom_w}, kurt_w={kurt_w}"
+    )
     print(f"Epochs: {SUP_EPOCHS} (Phase1) + {ADV_EPOCHS} (Phase2)")
 
     # Datasets
@@ -76,10 +92,10 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     E = Embedder(input_dim=43, hidden_dim=HIDDEN_DIM).to(device)
     R = Recovery(hidden_dim=HIDDEN_DIM, output_dim=43).to(device)
     S = Supervisor(input_dim=HIDDEN_DIM, hidden_dim=HIDDEN_DIM).to(device)
-    G = Generator(hidden_dim=HIDDEN_DIM, output_dim=HIDDEN_DIM).to(device)  # Latent Ĥ
-    D = Discriminator(input_dim=HIDDEN_DIM, hidden_dim=HIDDEN_DIM).to(
-        device
-    )  # Latent H/Ĥ
+    # Latent Ĥ
+    G = Generator(hidden_dim=HIDDEN_DIM, output_dim=HIDDEN_DIM).to(device)
+    # Latent H/Ĥ
+    D = Discriminator(input_dim=HIDDEN_DIM, hidden_dim=HIDDEN_DIM).to(device)
 
     models = {"E": E, "R": R, "S": S, "G": G, "D": D}
     total_params = sum(count_params(m) for m in models.values())
@@ -110,7 +126,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
 
         pbar = tqdm(train_loader, desc=f"Sup Epoch {epoch + 1}/{SUP_EPOCHS}")
         for x in pbar:
-            x = x.to(device)  # (B,T,43)
+            x = x.to(device)
 
             # Reconstruction: E => R => X_rec_hat
             h_real = E(x)  # (B,T,64)
@@ -124,7 +140,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             opt_R.step()
 
             # Supervisor:S predicts future latent state of E(x)d
-            h_real = E(x)  # Already computed—reuse
+            h_real = E(x)
             h_pred_next = S(h_real)
             h_target = h_real.detach()[:, 1:, :]  # actual latent at t+1
             sup_l = sup_loss_fn(h_pred_next, h_target)
@@ -194,7 +210,25 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             mom_loss = F.mse_loss(synth_mean, real_mean) + F.mse_loss(
                 synth_var, real_var
             )
-            g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency + 5 * mom_loss
+
+            # Improvement test: kurtosis proxy
+            real_kurt = (
+                ((x - real_mean.detach()) ** 4).mean(dim=1).mean(dim=0, keepdim=True)
+            )  # (1, 43)
+            synth_kurt = (
+                ((x_synth - synth_mean) ** 4).mean(dim=1).mean(dim=0, keepdim=True)
+            )  # (1, 43)
+            kurt_loss = F.mse_loss(synth_kurt, real_kurt)
+            kurt_loss = torch.clamp(kurt_loss, max=10.0)
+            mom_loss = torch.clamp(mom_loss, max=5.0)
+
+            # g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency + 5 * mom_loss
+            g_total_loss = (
+                g_adv_loss
+                + LAMBDA_SUP * sup_consistency
+                + mom_w * mom_loss
+                + kurt_w * kurt_loss
+            )
 
             opt_G.zero_grad()
             g_total_loss.backward()
@@ -242,7 +276,7 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
             v_pred = S(v_h)  # Supervisor computes in latent space
             val_sup += sup_loss_fn(v_pred, v_h[:, 1:, :]).item()
     print(
-        f"Validation → Recon={val_recon / len(val_loader):.4f}, Sup={val_sup / len(val_loader):.4f}"
+        f"Validation: Recon={val_recon / len(val_loader):.4f}, Sup={val_sup / len(val_loader):.4f}"
     )
 
     # Save checkpoints & plots
@@ -266,16 +300,56 @@ def train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS,
     print(f"Saved model and plot for {TAGS}\n")
 
 
-# Run Experiments
-for exp in EXPERIMENTS:
-    start = time.time()
-    HIDDEN_DIM = exp["hidden_dim"]
-    LR = exp["lr"]
-    LAMBDA_SUP = exp["lambda_sup"]
-    BATCH_SIZE = exp["batch_size"]
-    SUP_EPOCHS = 1 if DEBUG_QUICK else SUP_EPOCHS_FULL
-    ADV_EPOCHS = 1 if DEBUG_QUICK else ADV_EPOCHS_FULL
+# Main with argparse for --optuna
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--optuna", action="store_true", help="Run Optuna tuning")
+    args = parser.parse_args()
+    if not args.optuna:
+        # loop Experiments
+        for exp in EXPERIMENTS:
+            start = time.time()
+            HIDDEN_DIM = exp["hidden_dim"]
+            LR = exp["lr"]
+            LAMBDA_SUP = exp["lambda_sup"]
+            BATCH_SIZE = exp["batch_size"]
+            SUP_EPOCHS = 1 if DEBUG_QUICK else SUP_EPOCHS_FULL
+            ADV_EPOCHS = 1 if DEBUG_QUICK else ADV_EPOCHS_FULL
 
-    tag = f"hid{HIDDEN_DIM}_lr{LR}_sup{LAMBDA_SUP}_bs{BATCH_SIZE}"
-    train_single(HIDDEN_DIM, LR, LAMBDA_SUP, BATCH_SIZE, SUP_EPOCHS, ADV_EPOCHS, tag)
-    print(f"[DONE] {tag} finished in {(time.time() - start) / 60:.2f} min")
+            tag = f"hid{HIDDEN_DIM}_lr{LR}_sup{LAMBDA_SUP}_bs{BATCH_SIZE}"
+            train_single(
+                HIDDEN_DIM,
+                LR,
+                LAMBDA_SUP,
+                BATCH_SIZE,
+                SUP_EPOCHS,
+                ADV_EPOCHS,
+                tag,
+                mom_w=1.0,
+                kurt_w=5.0,
+            )
+            print(f"[DONE] {tag} finished in {(time.time() - start) / 60:.2f} min")
+    else:
+        # Optuna mode: Wrapper to pass train_single to objective
+        def optuna_objective(trial):
+            return objective(trial, train_single)
+
+        study = optuna.create_study(direction="maximize")
+        study.optimize(optuna_objective, n_trials=20)  # ~20-40min total on GPU
+        print(f"Best params: {study.best_params}")
+        print(f"Best score: {study.best_value}")
+
+        # Final retrain on best
+        best = study.best_params
+        tag_final = "optuna_best"
+        train_single(
+            best["hidden_dim"],
+            best["lr"],
+            best["lambda_sup"],
+            best["batch_size"],
+            SUP_EPOCHS_FULL,
+            ADV_EPOCHS_FULL,
+            tag_final,
+            mom_w=best["mom_w"],
+            kurt_w=best["kurt_w"],
+        )
