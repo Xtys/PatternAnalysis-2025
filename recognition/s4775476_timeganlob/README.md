@@ -34,7 +34,7 @@ An autoregressive GRU-based predictor that forecasts the next latent state $\hat
     - $\hat{H}_t = \tanh(W_s \cdot \text{GRU}(H_t; \theta_S) + b_s), \quad t = 1, \dots, T-1$
 
     where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via
-			![[111.png]]
+			![[images/111.png]]
 4. **Generator (G)**:
 Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
 
@@ -78,9 +78,9 @@ To address LOB-specific challenges like leptokurtosis, an auxiliary kurtosis pro
 Training Procedure
 ---
 Training proceeds in two phases, implemented in train.py with configurable sweeps over hyperparameters ($hidden_dim, lr, λ_sup, λ_kurt, batch_size$).
-- Phase 1 (Supervised Pretraining, 20 epochs): Optimize E and R for reconstruction loss MSE: 
-			$\mathcal{L}_{recon} = \| X - R(E(X)) \|^2$  
-and S for latent supervision loss  MSE:  
+- Phase 1 (Supervised Pretraining, 20 epochs): Optimize E and R for reconstruction loss MSE:
+			$\mathcal{L}_{recon} = \| X - R(E(X)) \|^2$
+and S for latent supervision loss  MSE:
 			$\mathcal{L}_{sup} = \| S(E(X)) - E(X)_{1:} \|^2$.
 - Phase 2 (Adversarial Training, 50 epochs): Alternate updates for D (BCE on real/fake latents) and G (adversarial BCE + $λ_{sup}$ * self-sup + moment matching). Moment loss enforces mean/variance alignment:
 			$\mathcal{L}_{mom}$ = $\| \mu_{\tilde{X}} - \mu_X \|^2 + \| \sigma_{\tilde{X}}^2 - \sigma_X^2 \|^2$.
@@ -112,16 +112,17 @@ Baseline Performance (hid64_sup0.1_bs32): All metrics failed.
 |KL Mid-Ret|≤0.1|0.170|False|Tail deficits.|
 |KL Spread|≤0.1|0.180|False|Variance clipping.|
 |SSIM Depths|>0.6|0.550|False|Smooth heatmaps.|
-## Improvements: Kurtosis Proxy and Optuna Tuning
+
+Improvements: Kurtosis Proxy and Optuna Tuning
 ---
-To address tails and optimization gaps, we will try this method: 
+To address tails and optimization gaps, we will try this method:
 
 1. **Kurtosis Proxy Loss**: Added to Phase 2 G: $\mathcal{L}_{kurt} = \| kurt(\tilde{X}) - kurt(X) \|^2$ (MSE on 4th moment), with $λ_kurt=5$. This fattens synth distributions without instability (quick ~1min edit to train.py).
 2. **Optuna Hyperparameter Optimization**: Bayesian search (20 trials) over $λ_sup (0.1-1.0)$, mom_w (0.5-5), kurt_w (1-10), lr (5e-4-1e-3). Multi-objective score: 0.3*(1-discrim) + 0.2*(1-KL/0.1) + 0.3_SSIM + 0.2_autocorr_match. Best: λ_sup=0.62, mom=1.8, kurt=4.1, lr=6.2e-4 (~10min run).
 
 Retraining - coming soon
 
-## Discussion and Conclusion
+Discussion and Conclusion
 ---
 coming soon
 
