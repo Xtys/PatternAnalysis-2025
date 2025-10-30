@@ -30,7 +30,7 @@ class Embedder(nn.Module):
         rnn_type:   'GRU' or 'LSTM' (default 'GRU')
     """
 
-    def __init__(self, input_dim=43, hidden_dim=64, num_layers=1, rnn_type="GRU"):
+    def __init__(self, input_dim=43, hidden_dim=64, num_layers=2, rnn_type="GRU"):
         super(Embedder, self).__init__()
         self.rnn = (
             nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
@@ -39,6 +39,7 @@ class Embedder(nn.Module):
         )
         self.fc = nn.Linear(hidden_dim, hidden_dim)
         self.tanh = nn.Tanh()
+        self.norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, x):
         """
@@ -47,17 +48,17 @@ class Embedder(nn.Module):
             Output: H (B, T, 64)
         """
         rnn_out, _ = self.rnn(x)
-        out = self.fc(rnn_out)
+        out = self.fc(self.norm(rnn_out))
         out = self.tanh(out)
         return out
 
 
 class Recovery(nn.Module):
     """
-    Decodes the latent representation H(64) back to reconstructed data X̂ R^(B, T, 43),
+    Decodes latent H ∈ ℝ^(B,T,64) → reconstructed X̂ ∈ ℝ^(B,T,43)
     """
 
-    def __init__(self, hidden_dim=64, output_dim=43, num_layers=1, rnn_type="GRU"):
+    def __init__(self, hidden_dim=64, output_dim=43, num_layers=2, rnn_type="GRU"):
         super(Recovery, self).__init__()
         self.rnn = (
             nn.GRU(hidden_dim, hidden_dim, num_layers, batch_first=True)
@@ -65,11 +66,12 @@ class Recovery(nn.Module):
             else nn.LSTM(hidden_dim, hidden_dim, num_layers, batch_first=True)
         )
         self.fc = nn.Linear(hidden_dim, output_dim)
+        self.norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, h):
         # h: (B, T, hidden_dim)
         rnn_out, _ = self.rnn(h)
-        out = self.fc(rnn_out)
+        out = self.fc(self.norm(rnn_out))
         return out
 
 
@@ -78,7 +80,7 @@ class Supervisor(nn.Module):
     Predicts next latent H_t+1 given H_t (autoregressive)
     """
 
-    def __init__(self, input_dim=64, hidden_dim=64, num_layers=1, rnn_type="GRU"):
+    def __init__(self, input_dim=64, hidden_dim=64, num_layers=2, rnn_type="GRU"):
         super(Supervisor, self).__init__()
         self.rnn = (
             nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
@@ -87,13 +89,15 @@ class Supervisor(nn.Module):
         )
         self.fc = nn.Linear(hidden_dim, hidden_dim)
         self.tanh = nn.Tanh()
+        self.norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, h):
         """
         Forward pass.
         """
         rnn_out, _ = self.rnn(h)
-        out = self.tanh(self.fc(rnn_out))
+        out = self.fc(self.norm(rnn_out))
+        out = self.tanh(out)
         return out  # keep full (B, T, hidden_dim)
 
 
@@ -117,6 +121,7 @@ class Generator(nn.Module):
         )
         self.fc = nn.Linear(hidden_dim, output_dim)
         self.tanh = nn.Tanh()
+        self.norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, z):
         """
@@ -127,7 +132,7 @@ class Generator(nn.Module):
             Tensor: Synthetic latent sequence Ĥ (B, T, 64)
         """
         rnn_out, _ = self.rnn(z)
-        out = self.fc(rnn_out)
+        out = self.fc(self.norm(rnn_out))
         out = self.tanh(out)
         return out
 
@@ -156,6 +161,7 @@ class Discriminator(nn.Module):
         )
         self.fc = nn.Linear(hidden_dim, 1)
         self.sigmoid = nn.Sigmoid()
+        self.norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, x):
         """
@@ -179,27 +185,40 @@ def count_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        nn.init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+
+
 if __name__ == "__main__":
     dummy_x = torch.randn(2, 20, 43)
     dummy_z = torch.randn(2, 20, 64)
 
     e = Embedder()
+    r = Recovery()
+    s = Supervisor()
+    g = Generator()
+    d = Discriminator()
+
+    # Initialize weights
+    for net in [e, r, s, g, d]:
+        net.apply(init_weights)
+    print("Weights initialized with Xavier uniform.")
+
     h = e(dummy_x)
     print(f"Embedder: {h.shape}, params: {count_params(e):,}")
 
-    r = Recovery()
     x_rec = r(h)
     print(f"Recovery: {x_rec.shape}, params: {count_params(r):,}")
 
-    s = Supervisor()
-    pred = s(dummy_x)
-    print(f"Supervisor: {pred.shape}, params: {count_params(s):,}")
+    h_hat_super = s(h)
+    print(f"Supervisor: {h_hat_super.shape}, params: {count_params(s):,}")
 
-    g = Generator()
-    x_fake = g(h)
-    print(f"Generator: {x_fake.shape}, params: {count_params(g):,}")
+    h_fake = g(dummy_z)
+    print(f"Generator: {h_fake.shape}, params: {count_params(g):,}")
 
-    d = Discriminator()
     logit = d(h)
     print(f"Discriminator: {logit.shape}, params: {count_params(d):,}")
 
