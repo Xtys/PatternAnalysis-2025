@@ -57,7 +57,7 @@ Each sample is a sequence of 20-64 timesteps containing 43 standardized features
 
 - Price levels: 20 bid and 20 ask relative prices, scaled as ticks from the mid-price (x100).
 - Volume levels: 20 bid and 20 ask log-transformed sizes $(log(1 + size$ for stability) for numerical stability.
-- Derived indicators: Spread (ask1 - bid1, scaled), mid-price return $(log(mid_t / mid_{t-1}))$, and imbalance (($bid1_s - ask1_s$) / ($bid1_s + ask1_s$)).
+- Derived indicators: Spread (ask1 - bid1, scaled), mid-price return $(log(mid_t / mid_{t-1}))$, and imbalance (($bid1_s - ask1_s$) / ($bid1_s + ask1_s$)) [3].
 
 All features were normalized using StandardScaler and stored fitted scaler ready for reuse during inference. The resulting dataset contains approximately 26,900 synchronized snapshots, having splitted into train (70%), validation (10%), and test (20%) partitions.
 
@@ -89,9 +89,9 @@ The model consisted of approximately **211k parameters** and was trained on an *
 
 | Metric          | Target | Baseline | Pass |
 | --------------- | ------ | -------- | ---- |
-| KL (spread)     | ≤ 0.1  | 20.681   | ❌    |
-| KL (mid-return) | ≤ 0.1  | 0.608    | ❌    |
-| SSIM (heatmap)  | > 0.6  | 0.0197   | ❌    |
+| KL (spread)     | ≤ 0.1  | 20.681   | No   |
+| KL (mid-return) | ≤ 0.1  | 0.608    | No   |
+| SSIM (heatmap)  | > 0.6  | 0.0197   | No   |
 
 table 1: Metric scores based on baseline model
 
