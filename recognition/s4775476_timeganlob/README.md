@@ -17,39 +17,33 @@ The proroposed model adopts the TimeGAN framework [1], which integrates autoenco
 The latent dimension is set to $d_h = 64$, resulting in approximately 211,000 trainable parameters across the full network. The Embedder–Recovery pair learns a latent representation of real LOB sequences through reconstruction loss, while the Generator–Supervisor pair synthesizes latent trajectories that emulate temporal dynamics. The Discriminator distinguishes between real and generated latent sequences, thereby enforcing distributional realism through adversarial training.
 ![Alt Text](images/design.png)
 1. **Embedder (E)**:
-The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation, where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
+The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation; where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
 
     - $H_t = \tanh(W_h \cdot \text{GRU}(X_t; \theta_E) + b_h), \quad t = 1, \dots, T$
 
 
 
 2. **Recovery (R)**:
-The Recovery module decodes the latent $H$ back to the feature space via a GRU and linear projection, producing reconstructed sequences $\hat{X} \in \mathbb{R}^{B \times T \times d_x}$:
+The Recovery module decodes the latent $H$ back to the feature space via a GRU and linear projection, producing reconstructed sequences $\hat{X} \in \mathbb{R}^{B \times T \times d_x}$; where $\theta_R$ are the GRU parameters, and $W_x, b_x$ project to the output dimension. It enforces reconstruction fidelity during pretraining via $\mathcal{L}_{recon} = \| X - \hat{X} \|^2_2$.
+
 
     - $\hat{X}_t = W_x \cdot \text{GRU}(H_t; \theta_R) + b_x, \quad t = 1, \dots, T$
 
-    where $\theta_R$ are the GRU parameters, and $W_x, b_x$ project to the output dimension. It enforces reconstruction fidelity during pretraining via $\mathcal{L}_{recon} = \| X - \hat{X} \|^2_2$.
-
 3. **Supervisor (S)**:
-An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1}$ from $H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$:
+An autoregressive GRU-based predictor that forecasts the next latent state $\hat{H}_{t+1}$ from $H_t$, outputting $\hat{H} \in \mathbb{R}^{B \times (T-1) \times d_h}$; where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via ![Alt Text](images/111.png)
 
     - $\hat{H}_t = \tanh(W_s \cdot \text{GRU}(H_t; \theta_S) + b_s), \quad t = 1, \dots, T-1$
 
-    where $\theta_S$ are the GRU parameters, and $W_s, b_s$ are the projection. This promotes temporal consistency via
-			![Alt Text](images/111.png)
 4. **Generator (G)**:
-Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection:
+Starting from random noise $Z \in \mathbb{R}^{B \times T \times d_h} \sim \mathcal{N}(0, I)$, the Generator produces synthetic latents $\hat{H} \in \mathbb{R}^{B \times T \times d_h}$ via GRU and tanh projection; where $\theta_G$ are the GRU parameters, and $W_g, b_g$ project. Composed with S and R, it yields full synthetic sequences $\tilde{X} = R(S(G(Z)))$.
 
     - $\hat{H}_t = \tanh(W_g \cdot \text{GRU}(Z_t; \theta_G) + b_g), \quad t = 1, \dots, T$
 
-    where $\theta_G$ are the GRU parameters, and $W_g, b_g$ project. Composed with S and R, it yields full synthetic sequences $\tilde{X} = R(S(G(Z)))$.
-
 5. **Discriminator (D)**:
-A GRU classifier that distinguishes real latents $H = E(X)$ from synthetic $\hat{H}$, outputting a scalar probability $p \in [0,1]$ via sigmoid:
+A GRU classifier that distinguishes real latents $H = E(X)$ from synthetic $\hat{H}$, outputting a scalar probability $p \in [0,1]$ via sigmoid; where $\theta_D$ are the GRU parameters, $H_T$ is the final hidden state, and $\sigma$ is the sigmoid. It provides adversarial signals to refine G via binary cross-entropy $\mathcal{L}_{adv} = -\mathbb{E}[\log p(H)] - \mathbb{E}[\log(1 - p(\hat{H}))]$.
+
 
     - $p = \sigma(W_d \cdot \text{GRU}(H_T; \theta_D) + b_d)$
-
-    where $\theta_D$ are the GRU parameters, $H_T$ is the final hidden state, and $\sigma$ is the sigmoid. It provides adversarial signals to refine G via binary cross-entropy $\mathcal{L}_{adv} = -\mathbb{E}[\log p(H)] - \mathbb{E}[\log(1 - p(\hat{H}))]$.
 
 Dataset loading and Preprocessing
 ---
