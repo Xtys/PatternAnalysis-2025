@@ -95,6 +95,8 @@ The model consisted of approximately **211k parameters** and was trained on an *
 
 *Table 1: Metric scores based on baseline model*
 
+![Alt Text](images/predict_eval_baseline.png)
+
 Hyper Parameter Tuning with Optuna
 ---
 
@@ -161,7 +163,7 @@ Trial 13
 | 20    | 2-4  |    128     | 3.42e-04 |   0.0876   |  0.00318   |   0.00429   |  16   |     22     |     81     | 0.646 |   32    |   0.00539    |
 | 21    |  15  |     32     | 8.32e-04 |   0.143    |   0.0967   |   0.00168   |  16   |     25     |     93     | 0.581 |   32    |   0.02196    |
 
- **T13** (objective = 0.00451) used `hidden_dim = 128`, `batch_size = 16`, `lr ≈ 1.0e-4`, `sup_weight = 0.114`, `mom_weight = 0.0034`, `kurt_weight = 0.001`, `sup_epochs = 25`, and `adv_epochs = 99`.  
+ **T13** (objective = 0.00451) used `hidden_dim = 128`, `batch_size = 16`, `lr ≈ 1.0e-4`, `sup_weight = 0.114`, `mom_weight = 0.0034`, `kurt_weight = 0.001`, `sup_epochs = 25`, and `adv_epochs = 99`.
 Assumption made here is that we will now use T13 as a starting point.
 Evaluation metrics (AMZN LOB Level-10):
 
@@ -174,8 +176,10 @@ Evaluation metrics (AMZN LOB Level-10):
 
 - Generator loss peaked near 5.5 around epoch 40 and steadily declined below 2 after epoch 80 This shows somewhat stable adversarial convergence.
     ![Alt Text](images/gen_optuna_trial13_rerun.png)
-- Discriminator loss oscillated 0.4 – 1.4, is means some degree of healthy competition, but no model collapse.  
+- Discriminator loss oscillated 0.4 – 1.4, is means some degree of healthy competition, but no model collapse.
 ![Alt Text](images/disc_optuna_trial13_rerun.png)
+
+![Alt Text](images/predict_eval_t13.png)
 
 #### Follow up approach
 
