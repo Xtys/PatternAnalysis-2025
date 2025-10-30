@@ -38,6 +38,18 @@ from modules import (
 )
 # import torch.nn.functional as F
 
+# SEQ_LEN = 20
+# SUP_EPOCHS_FULL = 20  # "pretrain" phase
+# ADV_EPOCHS_FULL = 50  # adversarial phase
+# MSG_FILE = "AMZN_2012-06-21_34200000_57600000_message_10.csv"
+# OB_FILE = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
+
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# print("Device:", device)
+
+# os.makedirs("checkpoints", exist_ok=True)
+# os.makedirs("plots", exist_ok=True)
+
 
 def set_seed(seed: int = 42) -> None:
     random.seed(seed)
@@ -93,63 +105,97 @@ def get_loaders(
     return train_loader, val_loader
 
 
-# Run one-epoch quick sanity test locally before long training
-# Set False for full training, other wise True.
-DEBUG_QUICK = False
+# Losses var
+MSE = nn.MSELoss()
+BCE = nn.BCELoss()
 
-# Experiment configurations (you can add more)
-EXPERIMENTS = [
-    {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    {"hidden_dim": 32, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    {"hidden_dim": 128, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 32},
-    {"hidden_dim": 64, "lr": 5e-4, "lambda_sup": 0.1, "batch_size": 32},
-    {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.3, "batch_size": 32},
-    {"hidden_dim": 64, "lr": 1e-3, "lambda_sup": 0.1, "batch_size": 64},
-]
 
-SEQ_LEN = 20
-SUP_EPOCHS_FULL = 20  # "pretrain" phase
-ADV_EPOCHS_FULL = 50  # adversarial phase
-MSG_FILE = "AMZN_2012-06-21_34200000_57600000_message_10.csv"
-OB_FILE = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
+def adversarial_targets(
+    batch: int, device: torch.device
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Label smoothing: 0.9 for real, 0.0 for fake
+    """
+    real = torch.full((batch, 1), 0.9, device=device)
+    fake = torch.zeros((batch, 1), device=device)
+    return real, fake
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Device:", device)
 
-os.makedirs("checkpoints", exist_ok=True)
-os.makedirs("plots", exist_ok=True)
+def moment_kurtosis_losses(
+    h_real: torch.Tensor, h_fake: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Match first two moments + kurtosis in latent space.
+    Inputs: (B, T, H)
+    """
+    # Aggregate across batch+time
+    real_flat = h_real.reshape(-1, h_real.size(-1))
+    fake_flat = h_fake.reshape(-1, h_fake.size(-1))
+
+    # Means / stds
+    mu_r = real_flat.mean(dim=0)
+    mu_f = fake_flat.mean(dim=0)
+    std_r = real_flat.std(dim=0) + 1e-6
+    std_f = fake_flat.std(dim=0) + 1e-6
+
+    mom_loss = (mu_r - mu_f).pow(2).mean() + (std_r - std_f).pow(2).mean()
+
+    # Kurtosis: E[((x - mu)/std)^4]
+    kr = (((real_flat - mu_r) / std_r) ** 4).mean(dim=0)
+    kf = (((fake_flat - mu_f) / std_f) ** 4).mean(dim=0)
+    kurt_loss = (kr - kf).pow(2).mean()
+    return mom_loss, kurt_loss
 
 
 # Training function
 def train_single(
-    HIDDEN_DIM,
-    LR,
-    LAMBDA_SUP,
-    BATCH_SIZE,
-    SUP_EPOCHS,
-    ADV_EPOCHS,
-    TAGS,
-    mom_w=1.0,
-    kurt_w=5.0,
-):
-    print(f"\n--- Running Experiment {TAGS} ---")
-    print(
-        f"hidden_dim={HIDDEN_DIM}, lr={LR}, λ_sup={LAMBDA_SUP}, batch={BATCH_SIZE}, mom_w={mom_w}, kurt_w={kurt_w}"
+    msg_file: str,
+    ob_file: str,
+    *,
+    seq_len: int = 64,
+    step: int = 32,
+    hidden_dim: int = 64,
+    batch_size: int = 32,
+    lr: float = 1e-3,
+    sup_weight: float = 0.15,
+    mom_weight: float = 5e-2,
+    kurt_weight: float = 5e-2,
+    sup_epochs: int = 10,
+    adv_epochs: int = 50,
+    tag: str = "baseline",
+    device: torch.device | None = None,
+    grad_clip: float = 5.0,
+    outdir: str = "checkpoints",
+    verbose: bool = True,
+) -> Tuple[float, float]:
+    """
+    Train a single TimeGAN run and return (val_recon, val_sup) for scoring.
+    This function is used by both normal runs and Optuna trials.
+    """
+    t0 = time.time()
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Data
+    train_loader, val_loader = get_loaders(
+        msg_file, ob_file, seq_len=seq_len, step=step, batch_size=batch_size
     )
-    print(f"Epochs: {SUP_EPOCHS} (Phase1) + {ADV_EPOCHS} (Phase2)")
 
     # Models
-    E = Embedder(input_dim=43, hidden_dim=HIDDEN_DIM).to(device)
-    R = Recovery(hidden_dim=HIDDEN_DIM, output_dim=43).to(device)
-    S = Supervisor(input_dim=HIDDEN_DIM, hidden_dim=HIDDEN_DIM).to(device)
+    E = Embedder(input_dim=43, hidden_dim=hidden_dim).to(device)
+    R = Recovery(hidden_dim=hidden_dim, output_dim=43).to(device)
+    S = Supervisor(input_dim=hidden_dim, hidden_dim=hidden_dim).to(device)
     # Latent Ĥ
-    G = Generator(hidden_dim=HIDDEN_DIM, output_dim=HIDDEN_DIM).to(device)
+    G = Generator(hidden_dim=hidden_dim, output_dim=hidden_dim).to(device)
     # Latent H/Ĥ
-    D = Discriminator(input_dim=HIDDEN_DIM, hidden_dim=HIDDEN_DIM).to(device)
+    D = Discriminator(input_dim=hidden_dim, hidden_dim=hidden_dim).to(device)
 
-    models = {"E": E, "R": R, "S": S, "G": G, "D": D}
-    total_params = sum(count_params(m) for m in models.values())
-    print(f"Total trainable params: {total_params:,}")
+    if verbose:
+        total = sum(map(count_params, [E, R, S, G, D]))
+        print(f"[Model] params: {total:,} | hidden={hidden_dim}")
+    if device.type == "cuda":
+        name = torch.cuda.get_device_name(0)
+        vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        print(f"[GPU] {name} ~ {vram:.1f} GB")
 
     # Optimizers
     opt_E = optim.Adam(E.parameters(), lr=LR)
@@ -158,13 +204,15 @@ def train_single(
     opt_G = optim.Adam(G.parameters(), lr=LR)
     opt_D = optim.Adam(D.parameters(), lr=LR)
 
-    # Losses
-    recon_loss_fn = nn.MSELoss()
-    sup_loss_fn = nn.MSELoss()
-    adv_loss_fn = nn.BCELoss()
-
-    # Tracking
-    loss_history = {"recon": [], "sup": [], "d_adv": [], "g_adv": []}
+    # Tracking loss history
+    history = {
+        "train_recon": [],
+        "train_sup": [],
+        "disc": [],
+        "gen": [],
+        "val_recon": [],
+        "val_sup": [],
+    }
 
     # Phase 1: Supervised Pretrain (E+R (reconstruction) and S (temporal sup))
     print("--- Phase 1: Reconstruction + Supervisor pretraining ---")
