@@ -6,10 +6,8 @@ ID:             S47754764
 Last update:    28/10/2025
 
 Reference:
-    - Multi-Level Order-Flow Imbalance in a Limit Order Book
-    Ke Xu∗1, Martin D. Gould1, and Sam D. Howison1
-    1Mathematical Institute, University of Oxford, Oxford OX2 6GG, UK
-    October 26, 2019
+    -Yoon, Jinsung et al. (2019), "Time-series Generative Adversarial Networks."
+    https://github.com/jsyoon0823/TimeGAN
 """
 
 import os

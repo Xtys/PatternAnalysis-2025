@@ -5,6 +5,10 @@ preprocessing, and normalising the Limit Order Book data (LOBSTER)
 Created by:     Brandon Loh
 ID:             S47754764
 Last update:    27/10/2025
+
+Reference:
+    - Xu, Ke et al. (2019), "Multi-Level Order-Flow Imbalance in a Limit Order Book."
+          Available at: https://arxiv.org/abs/1907.06230
 """
 
 import pandas as pd
