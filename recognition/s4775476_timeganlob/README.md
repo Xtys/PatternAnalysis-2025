@@ -98,7 +98,7 @@ The model consisted of approximately **211k parameters** and was trained on an *
 Hyper Parameter Tuning with Optuna
 ---
 
-To identify the optimal configuration for TimeGAN on AMZN LOB Level-10 data, we used Optuna; an open-source hyperparameter optimization framework that automates parameter search using **Bayesian optimization with Tree-structured Parzen Estimator (TPE)** sampling [4]. 
+To identify the optimal configuration for TimeGAN on AMZN LOB Level-10 data, we used Optuna; an open-source hyperparameter optimization framework that automates parameter search using **Bayesian optimization with Tree-structured Parzen Estimator (TPE)** sampling [4].
 
 Optuna efficiently balances exploration and exploitation by modeling the relationship between hyperparameters and objective performance, dynamically focusing on promising regions of the search space. A total of **20 trials** were conducted, each corresponding to a full training run under different parameter combinations.
 
@@ -119,7 +119,8 @@ $L_{obj} ​=0.5 × L_{recon} ​+ 0.5 × L_{sup}​$
 | `adv_epochs`      | Epochs for adversarial (generator + discriminator) training phase      | 50 to 100           | Uniform Integer            | Integer       |
 | `optimizer_beta1` | Adam optimizer β₁ momentum coefficient (affects convergence stability) | 0.5 to 0.9          | Linear                     | Float         |
 | `seq_len`         | Sequence window length for each training sample (temporal context)     | [32, 64]            | Categorical                | Integer       |
-*Table 2: Parameters used for tuning in our experiment* 
+
+*Table 2: Parameters used for tuning in our experiment*
 
 
 
@@ -181,7 +182,7 @@ Baseline model:
   --adv_epochs 70 \
   --tag amzn_lvl10_full
 ```
-20 Trial Optuna tuning: 
+20 Trial Optuna tuning:
 ```
 !python3 train.py --optuna --trials 20 --sup_epochs 10 --adv_epochs 30 --tag optuna_search
 ```
@@ -196,5 +197,5 @@ References
 [3] Xu, Ke et al. (2019), "Multi-Level Order-Flow Imbalance in a Limit Order Book."
 Available at: https://arxiv.org/abs/1907.06230
 
-[4] Akiba, T., Sano, S., Yanase, T., Ohta, T., & Koyama, M. (2019). _Optuna: A Next-generation Hyperparameter Optimization Framework._ Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (KDD ’19).  
+[4] Akiba, T., Sano, S., Yanase, T., Ohta, T., & Koyama, M. (2019). _Optuna: A Next-generation Hyperparameter Optimization Framework._ Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (KDD ’19).
 URL: [https://optuna.org](https://optuna.org)
