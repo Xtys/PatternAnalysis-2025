@@ -1,5 +1,6 @@
 """
-TimeGAN training script.
+Clean TimeGAN training script with optional Optuna tuning.
+- Two clear modes: (1) normal experiments, (2) --optuna hyperparameter search
 
 Created by:     Brandon Loh
 ID:             S47754764
@@ -11,12 +12,22 @@ Reference:
 """
 
 import os
+import time
+import argparse
+import random
+from typing import Tuple, Dict, Any
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from tqdm import tqdm
-import matplotlib.pyplot as plt
+
+try:
+    import optuna
+except ImportError:
+    optuna = None
+
 from dataset import LOBDataset
 from modules import (
     Embedder,
@@ -24,16 +35,64 @@ from modules import (
     Supervisor,
     Generator,
     Discriminator,
-    count_params,
 )
-import time
-import torch.nn.functional as F
+# import torch.nn.functional as F
 
-# improvement test
-from utils import objective
-import argparse
 
-# Global var
+def set_seed(seed: int = 42) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def count_params(model: nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def plot_losses(history: Dict[str, list], outdir: str, tag: str) -> None:
+    try:
+        import matplotlib.pyplot as plt
+
+        os.makedirs(outdir, exist_ok=True)
+        for key, vals in history.items():
+            if not vals:  # skip empties
+                continue
+            plt.figure()
+            plt.plot(vals)
+            plt.title(f"{key} — {tag}")
+            plt.xlabel("epoch")
+            plt.ylabel(key)
+            plt.tight_layout()
+            plt.savefig(os.path.join(outdir, f"{key}_{tag}.png"), dpi=160)
+            plt.close()
+    except Exception as e:
+        print(f"[plot] skipped: {e}")
+
+
+# load data
+def get_loaders(
+    msg_file: str,
+    ob_file: str,
+    seq_len: int = 64,
+    step: int = 32,
+    batch_size: int = 32,
+) -> Tuple[DataLoader, DataLoader]:
+    """
+    Create train/val dataloaders from LOBDataset.
+    """
+    train_ds = LOBDataset(msg_file, ob_file, train=True, seq_len=seq_len, step=step)
+    val_ds = LOBDataset(msg_file, ob_file, train=False, seq_len=seq_len, step=step)
+
+    train_loader = DataLoader(
+        train_ds, batch_size=batch_size, shuffle=True, num_workers=0, drop_last=True
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=batch_size, shuffle=False, num_workers=0, drop_last=False
+    )
+    return train_loader, val_loader
+
+
 # Run one-epoch quick sanity test locally before long training
 # Set False for full training, other wise True.
 DEBUG_QUICK = False
@@ -78,19 +137,6 @@ def train_single(
         f"hidden_dim={HIDDEN_DIM}, lr={LR}, λ_sup={LAMBDA_SUP}, batch={BATCH_SIZE}, mom_w={mom_w}, kurt_w={kurt_w}"
     )
     print(f"Epochs: {SUP_EPOCHS} (Phase1) + {ADV_EPOCHS} (Phase2)")
-
-    # Datasets
-    train_ds = LOBDataset(MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=True, val_split=0.1)
-    val_ds = LOBDataset(MSG_FILE, OB_FILE, seq_len=SEQ_LEN, train=False, val_split=0.1)
-
-    train_loader = DataLoader(
-        train_ds, batch_size=BATCH_SIZE, shuffle=True, drop_last=True
-    )
-    val_loader = DataLoader(
-        val_ds, batch_size=BATCH_SIZE, shuffle=False, drop_last=True
-    )
-
-    print(f"Train sequences: {len(train_ds)}, Val sequences: {len(val_ds)}")
 
     # Models
     E = Embedder(input_dim=43, hidden_dim=HIDDEN_DIM).to(device)
@@ -147,7 +193,7 @@ def train_single(
             h_real = E(x)
             h_pred_next = S(h_real)
             h_target = h_real.detach()[:, 1:, :]  # actual latent at t+1
-            sup_l = sup_loss_fn(h_pred_next, h_target)
+            sup_l = sup_loss_fn(h_pred_next[:, :-1, :], h_target)
 
             opt_S.zero_grad()
             sup_l.backward()
@@ -278,7 +324,7 @@ def train_single(
             v_x_rec = R(v_h)
             val_recon += recon_loss_fn(v_x_rec, v_x).item()
             v_pred = S(v_h)  # Supervisor computes in latent space
-            val_sup += sup_loss_fn(v_pred, v_h[:, 1:, :]).item()
+            val_sup += sup_loss_fn(v_pred[:, :-1, :], v_h[:, 1:, :]).item()
     print(
         f"Validation: Recon={val_recon / len(val_loader):.4f}, Sup={val_sup / len(val_loader):.4f}"
     )
@@ -302,6 +348,33 @@ def train_single(
     plt.savefig(f"plots/losses_{TAGS}.png", dpi=150)
     # plt.show()
     print(f"Saved model and plot for {TAGS}\n")
+
+
+def optuna_objective(trial):
+    # 1️⃣ Suggest hyperparameters
+    HIDDEN_DIM = trial.suggest_categorical("hidden_dim", [32, 64, 128])
+    LR = trial.suggest_loguniform("lr", 1e-4, 1e-2)
+    LAMBDA_SUP = trial.suggest_uniform("lambda_sup", 0.05, 0.3)
+    BATCH_SIZE = trial.suggest_categorical("batch_size", [16, 32, 64])
+    MOM_W = trial.suggest_loguniform("mom_w", 1e-3, 1e-1)
+    KURT_W = trial.suggest_loguniform("kurt_w", 1e-3, 1e-1)
+
+    # 2️⃣ Train a short run (fast)
+    val_recon, val_sup = train_single(
+        HIDDEN_DIM,
+        LR,
+        LAMBDA_SUP,
+        BATCH_SIZE,
+        SUP_EPOCHS=5,  # small for tuning
+        ADV_EPOCHS=10,
+        TAGS=f"trial{trial.number}",
+        mom_w=MOM_W,
+        kurt_w=KURT_W,
+    )
+
+    # 3️⃣ Compute combined score (to maximize)
+    score = -(val_recon + val_sup)  # lower loss → higher score
+    return score
 
 
 # Main with argparse for --optuna
