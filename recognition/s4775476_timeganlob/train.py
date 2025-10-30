@@ -264,106 +264,89 @@ def train_single(
             )
 
     # phase 2: Adversarial Training
-    print("--- Phase 2: Adversarial training ---")
-    for epoch in range(ADV_EPOCHS):
+    print("--- Phase 2 ---")
+    for epoch in range(1, adv_epochs + 1):
         E.train()
         R.train()
         S.train()
         G.train()
         D.train()
-        epoch_d_total, epoch_g_total = 0, 0
+        ep_d = 0.0
+        ep_g = 0.0
 
-        pbar = tqdm(train_loader, desc=f"Adv Epoch {epoch + 1}/{ADV_EPOCHS}")
-        for batch in pbar:
-            x = batch[0] if isinstance(batch, (list, tuple)) else batch
-            x = x.to(device)
-            batch_size = x.size(0)
-
-            h_real = E(x).detach()
-            z = torch.randn(batch_size, SEQ_LEN, HIDDEN_DIM, device=device)
-            h_fake_d = G(z).detach()
+        for x in train_loader:
+            x = torch.as_tensor(x, dtype=torch.float32, device=device)
+            bsz = x.size(0)
+            real_lbl, fake_lbl = adversarial_targets(bsz, device)
 
             # Train Discriminator
-            real_lbl = torch.ones(batch_size, 1, device=device)
-            fake_lbl = torch.zeros(batch_size, 1, device=device)
-
-            d_real = D(h_real)
-            d_fake = D(h_fake_d)
-            d_loss = adv_loss_fn(d_real, real_lbl) + adv_loss_fn(d_fake, fake_lbl)
             opt_D.zero_grad()
+            with torch.no_grad():
+                h_real = E(x)
+                z = torch.randn_like(h_real)
+                h_fake = G(z)
+            d_real = D(h_real)
+            d_fake = D(h_fake)
+            d_loss = BCE(d_real, real_lbl) + BCE(d_fake, fake_lbl)
             d_loss.backward()
+            if grad_clip:
+                nn.utils.clip_grad_norm_(D.parameters(), grad_clip)
             opt_D.step()
 
             # Train Generator
-            z = torch.randn(batch_size, SEQ_LEN, HIDDEN_DIM, device=device)
-            h_fake = G(z)
-            d_fake_g = D(h_fake)  # Use discriminator for adv_loss
-            g_adv_loss = adv_loss_fn(d_fake_g, real_lbl)
-
-            h_fake_pred = S(h_fake)  # Latent self-sup (B,T-1,64)
-            h_fake_target = h_fake[:, 1:, :]
-            sup_consistency = sup_loss_fn(h_fake_pred, h_fake_target)
-
-            x_synth = R(h_fake)  # Temp for moments (B,T,43)
-            with torch.no_grad():
-                real_mean = x.mean(dim=1).mean(dim=0, keepdim=True)  # (1,43)
-                real_var = x.var(dim=1).mean(dim=0, keepdim=True)
-            synth_mean = x_synth.mean(dim=1).mean(dim=0, keepdim=True)
-            synth_var = x_synth.var(dim=1).mean(dim=0, keepdim=True)
-            mom_loss = F.mse_loss(synth_mean, real_mean) + F.mse_loss(
-                synth_var, real_var
-            )
-
-            # Improvement test: kurtosis proxy
-            real_kurt = (
-                ((x - real_mean.detach()) ** 4).mean(dim=1).mean(dim=0, keepdim=True)
-            )  # (1, 43)
-            synth_kurt = (
-                ((x_synth - synth_mean) ** 4).mean(dim=1).mean(dim=0, keepdim=True)
-            )  # (1, 43)
-            kurt_loss = F.mse_loss(synth_kurt, real_kurt)
-            kurt_loss = torch.clamp(kurt_loss, max=10.0)
-            mom_loss = torch.clamp(mom_loss, max=5.0)
-
-            # g_total_loss = g_adv_loss + LAMBDA_SUP * sup_consistency + 5 * mom_loss
-            g_total_loss = (
-                g_adv_loss
-                + LAMBDA_SUP * sup_consistency
-                + mom_w * mom_loss
-                + kurt_w * kurt_loss
-            )
-
             opt_G.zero_grad()
-            g_total_loss.backward()
+            z = torch.randn_like(h_real)
+            h_fake = G(z)
+            d_fake = D(h_fake)
+            g_adv = BCE(d_fake, real_lbl)  # fake near to real
+
+            # Consistency with Supervisor
+            h_sup = S(h_fake)
+            sup_consistency = MSE(h_sup[:, :-1, :], h_fake[:, 1:, :])
+
+            # Moment & kurtosis match in latent space
+            h_real_nograd = E(x).detach()
+            mom_l, kurt_l = moment_kurtosis_losses(h_real_nograd, h_fake)
+
+            g_total = (
+                g_adv
+                + sup_weight * sup_consistency
+                + mom_weight * mom_l
+                + kurt_weight * kurt_l
+            )
+            g_total.backward()
+            if grad_clip:
+                nn.utils.clip_grad_norm_(G.parameters(), grad_clip)
+                nn.utils.clip_grad_norm_(S.parameters(), grad_clip)
             opt_G.step()
 
             # Joint train E/R/S on real
-            h = E(x)
-            h_sup = S(h)  # (B,T-1,64)
-            h_sup_full = torch.cat([h_sup, h[:, -1:, :]], dim=1)  # Pad to T
-            x_tilde = R(h_sup_full)
-            recon_sup_l = recon_loss_fn(x_tilde, x)
-            h_pred_real = S(h)
-            h_target_real = h[:, 1:, :]
-            sup_real_l = sup_loss_fn(h_pred_real, h_target_real)
-            e_r_s_loss = recon_sup_l + 0.1 * sup_real_l  # Light sup weight
             opt_E.zero_grad()
             opt_R.zero_grad()
             opt_S.zero_grad()
-            e_r_s_loss.backward()
+            h = E(x)
+            h_sup_full = S(h)
+            # Keep sequence length alignment for R
+            x_tilde = R(h_sup_full)
+            rec_l = MSE(x_tilde, x)
+            sup_real_l = MSE(h_sup_full[:, :-1, :], h[:, 1:, :])
+            (rec_l + 0.1 * sup_real_l).backward()
+            if grad_clip:
+                nn.utils.clip_grad_norm_(E.parameters(), grad_clip)
+                nn.utils.clip_grad_norm_(R.parameters(), grad_clip)
+                nn.utils.clip_grad_norm_(S.parameters(), grad_clip)
             opt_E.step()
             opt_R.step()
             opt_S.step()
+            ep_d += d_loss.item()
+            ep_g += g_total.item()
 
-            epoch_d_total += d_loss.item()
-            epoch_g_total += g_total_loss.item()
-            pbar.set_postfix({"D": f"{d_loss:.4f}", "G": f"{g_total_loss:.4f}"})
-
-        loss_history["d_adv"].append(epoch_d_total / len(train_loader))
-        loss_history["g_adv"].append(epoch_g_total / len(train_loader))
-        print(
-            f"[Phase2][Epoch {epoch + 1}] D={loss_history['d_adv'][-1]:.4f} G={loss_history['g_adv'][-1]:.4f}"
-        )
+        history["disc"].append(ep_d / max(1, len(train_loader)))
+        history["gen"].append(ep_g / max(1, len(train_loader)))
+        if verbose and (epoch == 1 or epoch % 5 == 0):
+            print(
+                f"[ADV {epoch:03d}] D={history['disc'][-1]:.4f} | G={history['gen'][-1]:.4f}"
+            )
 
     # Validation snapshot
     val_recon, val_sup = 0, 0
