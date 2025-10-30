@@ -136,6 +136,8 @@ Trial 13
 
 **Trial 13** is the optimal configuration which achieved stable convergence without discriminator oscillation. The reconstruction and supervised losses both decreased smoothly, confirming effective temporal encoding.
 
+*Table 3: Below shows the 20 trials results and thier ranking*
+
 | Trial | Rank | hidden_dim |    lr    | sup_weight | mom_weight | kurt_weight | batch | sup_epochs | adv_epochs |  β₁   | seq_len | Obj. Value ↓ |
 | :---- | :--: | :--------: | :------: | :--------: | :--------: | :---------: | :---: | :--------: | :--------: | :---: | :-----: | :----------: |
 | 2     |  8   |    128     | 4.35e-03 |   0.218    |   0.0466   |   0.0719    |  32   |     11     |     51     | 0.713 |   32    |    0.3191    |
@@ -158,6 +160,26 @@ Trial 13
 | 19    |  14  |    128     | 1.29e-03 |   0.203    |   0.0225   |   0.00180   |  16   |     27     |     87     | 0.516 |   32    |    0.2655    |
 | 20    | 2-4  |    128     | 3.42e-04 |   0.0876   |  0.00318   |   0.00429   |  16   |     22     |     81     | 0.646 |   32    |   0.00539    |
 | 21    |  15  |     32     | 8.32e-04 |   0.143    |   0.0967   |   0.00168   |  16   |     25     |     93     | 0.581 |   32    |   0.02196    |
+
+ **T13** (objective = 0.00451) used `hidden_dim = 128`, `batch_size = 16`, `lr ≈ 1.0e-4`, `sup_weight = 0.114`, `mom_weight = 0.0034`, `kurt_weight = 0.001`, `sup_epochs = 25`, and `adv_epochs = 99`.  
+Assumption made here is that we will now use T13 as a starting point.
+Evaluation metrics (AMZN LOB Level-10):
+
+| Metric       | Target |  T 13  |  Pass  |
+| :----------- | :----: | :----: | :----: |
+| KL (spread)  | ≤ 0.1  | 20.68  | Failed |
+| KL (mid-ret) | ≤ 0.1  |  0.61  | Failed |
+| SSIM (avg)   | > 0.6  | −0.034 | Failed |
+**Training behaviour:**
+
+- Generator loss peaked near 5.5 around epoch 40 and steadily declined below 2 after epoch 80 This shows somewhat stable adversarial convergence.
+    ![Alt Text](images/gen_optuna_trial13_rerun.png)
+- Discriminator loss oscillated 0.4 – 1.4, is means some degree of healthy competition, but no model collapse.  
+![Alt Text](images/disc_optuna_trial13_rerun.png)
+
+#### Follow up approach
+
+
 
 
 
