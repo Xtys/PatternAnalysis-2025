@@ -63,17 +63,13 @@ This structured preprocessing ensures stable TimeGAN training while preserving m
 
 Model
 ---
- In Phase 1, the autoencoder components (Embedder and Recovery) are pretrained to reconstruct input sequences, while the Supervisor learns autoregressive transitions in the latent space. This establishes a foundational representation capable of capturing short-term dependencies in high-frequency market snapshots.
-
 The model extends the TimeGAN framework as a sequence-to-sequence GAN for LOB data, trained in two phases to separate temporal learning from distributional alignment.
 
 In Phase 1, the Embedder–Recovery autoencoder reconstructs input sequences, while the Supervisor learns one-step transitions in the latent space. The latent dimension $d_h = 64$ compresses the 43-feature input while preserving temporal structure via single-layer GRUs. Tanh activations in the Embedder, Supervisor, and Generator bound latent values to [−1,1] for gradient stability.
 
-The latent space (dimension 64) serves as a bottleneck for information flow, compressing the 43-dimensional feature vectors while retaining temporal structure through GRU hidden states. Each GRU module employs a single layer with batch-first processing, this way is more efficient in handling the variable-length sequences (fixed at T=20 here). The tanh activations in Embedder, Supervisor, and Generator bound outputs to [-1,1], normalizing inputs and promoting stable gradient flow during backpropagation.
+In Phase 2, the Generator and Discriminator are trained adversarially. The generator synthesizes noise-driven latent trajectories, guided by the pretrained modules to produce realistic LOB dynamics. To correct for fat-tailed LOB distributions, moment-matching (mean + variance) and kurtosis losses are added, enforcing higher-order statistical consistency between real and synthetic features.
 
-In Phase 2, the adversarial components (Generator and Discriminator) are introduced. The Generator synthesizes noise-driven latents that are then supervised by the pretrained modules to produce plausible LOB sequences. Moment-matching losses are applied to enforce statistical alignment (mean and variance) across features, this is a common practice in financial GANs. Adam optimizers incorporate weight decay (default 1e-5) and the supervisor loss is weighted by $λ_{sup}$ (tuned 0.1-1.0) to balance temporal smoothness against adversarial sharpness.
-
-To address LOB-specific challenges like leptokurtosis, an auxiliary kurtosis proxy loss is integrated into the Generator's objective. This will lead to computing the fourth central moment mismatch across batches. This will cause heavier tails in synthetic distributions without altering the core architecture with its weight ($λ_{kurt=5}$ baseline) optimized via Bayesian search.
+Training uses Adam (lr ≈ 1e-3 / Optuna-tuned 4.5e-4), gradient clipping (‖∇‖≤5), and light weight decay (1e-5), ensuring stable convergence across 10 pretraining and 50 adversarial epochs.
 
 ![Alt Text](images/model_design.png)
 
