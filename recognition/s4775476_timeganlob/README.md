@@ -12,16 +12,16 @@ These findings highlight the need for further tuning. In the next stage, the mod
 
 Model Architecture
 ---
-The pis proroposed model adopts the TimeGAN framework [1], which integrates autoencoding, supervised sequence prediction, and adversarial learning to generate temporally consistent synthetic LOB sequences. The network consists of five recurrent modules: Embedder (E), Recovery (R), Supervisor (S), Generator (G), and Discriminator (D). All implemented using Gated Recurrent Unit (GRU) layers for efficiency and temporal stability in capturing temporal dependencies.
+The proroposed model adopts the TimeGAN framework [1], which integrates autoencoding, supervised sequence prediction, and adversarial learning to generate temporally consistent synthetic LOB sequences. The network consists of five recurrent modules: Embedder (E), Recovery (R), Supervisor (S), Generator (G), and Discriminator (D). All implemented using Gated Recurrent Unit (GRU) layers for efficiency and temporal stability in capturing temporal dependencies.
 
 The latent dimension is set to $d_h = 64$, resulting in approximately 211,000 trainable parameters across the full network. The Embedder–Recovery pair learns a latent representation of real LOB sequences through reconstruction loss, while the Generator–Supervisor pair synthesizes latent trajectories that emulate temporal dynamics. The Discriminator distinguishes between real and generated latent sequences, thereby enforcing distributional realism through adversarial training.
 ![Alt Text](images/design.png)
 1. **Embedder (E)**:
-The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation:
+The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation, where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
 
     - $H_t = \tanh(W_h \cdot \text{GRU}(X_t; \theta_E) + b_h), \quad t = 1, \dots, T$
 
-    where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
+
 
 2. **Recovery (R)**:
 The Recovery module decodes the latent $H$ back to the feature space via a GRU and linear projection, producing reconstructed sequences $\hat{X} \in \mathbb{R}^{B \times T \times d_x}$:
