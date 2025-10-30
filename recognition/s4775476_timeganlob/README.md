@@ -13,7 +13,7 @@ These findings highlight the need for further tuning. In the next stage, the mod
 Model Architecture
 ---
 The architecture of this project follows the TimeGAN framework [1], combining autoencoding, supervised prediction, and adversarial generation to model temporal dependencies in LOB sequences. The network consists of five key modules: Embedder (E), Recovery (R), Supervisor (S), Generator (G), and Discriminator (D), all implemented using GRU layers for efficiency and temporal stability. The latent dimension is set to $d_h = 64$, resulting in approximately 136,000 trainable parameters across all components.
-
+![Alt Text](images/design.png)
 1. **Embedder (E)**:
 The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation:
 
