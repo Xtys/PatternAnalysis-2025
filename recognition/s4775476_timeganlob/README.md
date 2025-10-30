@@ -63,7 +63,11 @@ This structured preprocessing ensures stable TimeGAN training while preserving m
 
 Model
 ---
-We implement the TimeGAN model as a sequence-to-sequence generative adversarial network tailored for LOB data. It operates in a two-phase training regime to disentangle temporal dynamics from distributional fidelity. In Phase 1, the autoencoder components (Embedder and Recovery) are pretrained to reconstruct input sequences, while the Supervisor learns autoregressive transitions in the latent space. This establishes a foundational representation capable of capturing short-term dependencies in high-frequency market snapshots.
+ In Phase 1, the autoencoder components (Embedder and Recovery) are pretrained to reconstruct input sequences, while the Supervisor learns autoregressive transitions in the latent space. This establishes a foundational representation capable of capturing short-term dependencies in high-frequency market snapshots.
+
+The model extends the TimeGAN framework as a sequence-to-sequence GAN for LOB data, trained in two phases to separate temporal learning from distributional alignment.
+
+In Phase 1, the Embedder–Recovery autoencoder reconstructs input sequences, while the Supervisor learns one-step transitions in the latent space. The latent dimension $d_h = 64$ compresses the 43-feature input while preserving temporal structure via single-layer GRUs. Tanh activations in the Embedder, Supervisor, and Generator bound latent values to [−1,1] for gradient stability.
 
 The latent space (dimension 64) serves as a bottleneck for information flow, compressing the 43-dimensional feature vectors while retaining temporal structure through GRU hidden states. Each GRU module employs a single layer with batch-first processing, this way is more efficient in handling the variable-length sequences (fixed at T=20 here). The tanh activations in Embedder, Supervisor, and Generator bound outputs to [-1,1], normalizing inputs and promoting stable gradient flow during backpropagation.
 
@@ -112,12 +116,7 @@ Baseline Performance (hid64_sup0.1_bs32): All metrics failed.
 |KL Spread|≤0.1|0.180|False|Variance clipping.|
 |SSIM Depths|>0.6|0.550|False|Smooth heatmaps.|
 
-Improvements: Kurtosis Proxy and Optuna Tuning
----
-To address tails and optimization gaps, we will try this method:
 
-1. **Kurtosis Proxy Loss**: Added to Phase 2 G: $\mathcal{L}_{kurt} = \| kurt(\tilde{X}) - kurt(X) \|^2$ (MSE on 4th moment), with $λ_kurt=5$. This fattens synth distributions without instability (quick ~1min edit to train.py).
-2. **Optuna Hyperparameter Optimization**: Bayesian search (20 trials) over $λ_sup (0.1-1.0)$, mom_w (0.5-5), kurt_w (1-10), lr (5e-4-1e-3). Multi-objective score: 0.3*(1-discrim) + 0.2*(1-KL/0.1) + 0.3_SSIM + 0.2_autocorr_match. Best: λ_sup=0.62, mom=1.8, kurt=4.1, lr=6.2e-4 (~10min run).
 
 Retraining - coming soon
 
