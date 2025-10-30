@@ -348,121 +348,172 @@ def train_single(
                 f"[ADV {epoch:03d}] D={history['disc'][-1]:.4f} | G={history['gen'][-1]:.4f}"
             )
 
-    # Validation snapshot
-    val_recon, val_sup = 0, 0
+    # validation at end of each ADV epoch
     E.eval()
     R.eval()
     S.eval()
+    v_recon, v_sup = 0.0, 0.0
+
     with torch.no_grad():
-        for v_x in val_loader:
-            v_x = v_x.to(device)
-            v_h = E(v_x)
-            v_x_rec = R(v_h)
-            val_recon += recon_loss_fn(v_x_rec, v_x).item()
-            v_pred = S(v_h)  # Supervisor computes in latent space
-            val_sup += sup_loss_fn(v_pred[:, :-1, :], v_h[:, 1:, :]).item()
-    print(
-        f"Validation: Recon={val_recon / len(val_loader):.4f}, Sup={val_sup / len(val_loader):.4f}"
-    )
+        for vx in val_loader:
+            vx = torch.as_tensor(vx, dtype=torch.float32, device=device)
+            vh = E(vx)
+            vx_rec = R(vh)
+            v_recon += MSE(vx_rec, vx).item()
 
-    # Save checkpoints & plots
-    torch.save(
-        {k: m.state_dict() for k, m in models.items()},
-        f"checkpoints/timegan_{TAGS}.pth",
-    )
-    plt.figure(figsize=(10, 6))
-    plt.plot(loss_history["recon"], label="Recon")
-    plt.plot(loss_history["sup"], label="Sup")
-    plt.plot(loss_history["d_adv"], label="D_adv")
-    plt.plot(loss_history["g_adv"], label="G_adv")
-    plt.legend()
-    plt.grid(True)
-    plt.title(f"Losses - {TAGS}")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.tight_layout()
-    plt.savefig(f"plots/losses_{TAGS}.png", dpi=150)
-    # plt.show()
-    print(f"Saved model and plot for {TAGS}\n")
+            vpred = S(vh)
+            v_sup += MSE(vpred[:, :-1, :], vh[:, 1:, :]).item()
+        history["val_recon"].append(v_recon / max(1, len(val_loader)))
+        history["val_sup"].append(v_sup / max(1, len(val_loader)))
+
+    # Save checkpoints + plots
+    os.makedirs(outdir, exist_ok=True)
+    ckpt = {
+        "E": E.state_dict(),
+        "R": R.state_dict(),
+        "S": S.state_dict(),
+        "G": G.state_dict(),
+        "D": D.state_dict(),
+        "history": history,
+        "config": {
+            "seq_len": seq_len,
+            "step": step,
+            "hidden_dim": hidden_dim,
+            "batch_size": batch_size,
+            "lr": lr,
+            "sup_weight": sup_weight,
+            "mom_weight": mom_weight,
+            "kurt_weight": kurt_weight,
+            "sup_epochs": sup_epochs,
+            "adv_epochs": adv_epochs,
+            "tag": tag,
+        },
+    }
+    torch.save(ckpt, os.path.join(outdir, f"timegan_{tag}.pt"))
+    plot_losses(history, outdir, tag)
+
+    if verbose:
+        dt = (time.time() - t0) / 3600
+        print(
+            f"[DONE] tag={tag} | time={dt:.2f} h | val_recon={history['val_recon'][-1]:.4f} | val_sup={history['val_sup'][-1]:.4f}"
+        )
+
+    return history["val_recon"][-1], history["val_sup"][-1]
 
 
-def optuna_objective(trial):
-    # 1️⃣ Suggest hyperparameters
-    HIDDEN_DIM = trial.suggest_categorical("hidden_dim", [32, 64, 128])
-    LR = trial.suggest_loguniform("lr", 1e-4, 1e-2)
-    LAMBDA_SUP = trial.suggest_uniform("lambda_sup", 0.05, 0.3)
-    BATCH_SIZE = trial.suggest_categorical("batch_size", [16, 32, 64])
-    MOM_W = trial.suggest_loguniform("mom_w", 1e-3, 1e-1)
-    KURT_W = trial.suggest_loguniform("kurt_w", 1e-3, 1e-1)
+# Optuna objective
+def objective(trial: "optuna.trial.Trial") -> float:
+    assert optuna is not None, "Optuna not installed. pip install optuna"
 
-    # 2️⃣ Train a short run (fast)
+    # Hyperparameter (search space)
+    hidden_dim = trial.suggest_categorical("hidden_dim", [32, 64, 128])
+    lr = trial.suggest_loguniform("lr", 1e-4, 1e-2)
+    sup_w = trial.suggest_uniform("sup_weight", 0.05, 0.3)
+    mom_w = trial.suggest_loguniform("mom_weight", 1e-3, 1e-1)
+    kurt_w = trial.suggest_loguniform("kurt_weight", 1e-3, 1e-1)
+    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+
+    # Short runs for tuning
     val_recon, val_sup = train_single(
-        HIDDEN_DIM,
-        LR,
-        LAMBDA_SUP,
-        BATCH_SIZE,
-        SUP_EPOCHS=5,  # small for tuning
-        ADV_EPOCHS=10,
-        TAGS=f"trial{trial.number}",
-        mom_w=MOM_W,
-        kurt_w=KURT_W,
+        trial.user_attrs.get("msg_file", args.msg_file),
+        trial.user_attrs.get("ob_file", args.ob_file),
+        seq_len=args.seq_len,
+        step=args.step,
+        hidden_dim=hidden_dim,
+        batch_size=batch_size,
+        lr=lr,
+        sup_weight=sup_w,
+        mom_weight=mom_w,
+        kurt_weight=kurt_w,
+        sup_epochs=max(3, args.sup_epochs // 2),
+        adv_epochs=max(6, args.adv_epochs // 3),
+        tag=f"optuna_trial{trial.number}",
+        verbose=False,
     )
 
-    # 3️⃣ Compute combined score (to maximize)
-    score = -(val_recon + val_sup)  # lower loss → higher score
+    # Combine losses into a single metric to minimize
+    # Encourage low reconstruction AND good supervisor alignment
+    score = 0.5 * val_recon + 0.5 * val_sup
+    trial.set_user_attr("val_recon", float(val_recon))
+    trial.set_user_attr("val_sup", float(val_sup))
     return score
 
 
-# Main with argparse for --optuna
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="TimeGAN Trainer (Clean)")
+    parser.add_argument(
+        "--msg_file",
+        type=str,
+        default="AMZN_2012-06-21_34200000_57600000_message_10.csv",
+    )
+    parser.add_argument(
+        "--ob_file",
+        type=str,
+        default="AMZN_2012-06-21_34200000_57600000_orderbook_10.csv",
+    )
+    parser.add_argument("--seq_len", type=int, default=64)
+    parser.add_argument("--step", type=int, default=32)
+    parser.add_argument("--hidden_dim", type=int, default=64)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--sup_weight", type=float, default=0.15)
+    parser.add_argument("--mom_weight", type=float, default=5e-2)
+    parser.add_argument("--kurt_weight", type=float, default=5e-2)
+    parser.add_argument("--sup_epochs", type=int, default=10)
+    parser.add_argument("--adv_epochs", type=int, default=50)
+    parser.add_argument("--tag", type=str, default="clean")
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--optuna", action="store_true", help="Run Optuna tuning")
+    parser.add_argument("--trials", type=int, default=20)
     args = parser.parse_args()
-    if not args.optuna:
-        # loop Experiments
-        for exp in EXPERIMENTS:
-            start = time.time()
-            HIDDEN_DIM = exp["hidden_dim"]
-            LR = exp["lr"]
-            LAMBDA_SUP = exp["lambda_sup"]
-            BATCH_SIZE = exp["batch_size"]
-            SUP_EPOCHS = 1 if DEBUG_QUICK else SUP_EPOCHS_FULL
-            ADV_EPOCHS = 1 if DEBUG_QUICK else ADV_EPOCHS_FULL
 
-            tag = f"hid{HIDDEN_DIM}_lr{LR}_sup{LAMBDA_SUP}_bs{BATCH_SIZE}"
-            train_single(
-                HIDDEN_DIM,
-                LR,
-                LAMBDA_SUP,
-                BATCH_SIZE,
-                SUP_EPOCHS,
-                ADV_EPOCHS,
-                tag,
-                mom_w=1.0,
-                kurt_w=5.0,
-            )
-            print(f"[DONE] {tag} finished in {(time.time() - start) / 60:.2f} min")
-    else:
-        # Optuna mode: Wrapper to pass train_single to objective
-        def optuna_objective(trial):
-            return objective(trial, train_single)
+    set_seed(args.seed)
 
-        study = optuna.create_study(direction="maximize")
-        study.optimize(optuna_objective, n_trials=20)  # ~20-40min total on GPU
-        print(f"Best params: {study.best_params}")
-        print(f"Best score: {study.best_value}")
+    if args.optuna:
+        if optuna is None:
+            raise RuntimeError("Optuna not installed. pip install optuna")
+        # Attach file paths for objective()
+        study = optuna.create_study(direction="minimize")
 
-        # Final retrain on best
-        best = study.best_params
-        tag_final = "optuna_best"
+        # (Optional) set attrs with file names to avoid globals
+        def _obj(trial):
+            trial.set_user_attr("msg_file", args.msg_file)
+            trial.set_user_attr("ob_file", args.ob_file)
+            return objective(trial)
+
+        study.optimize(_obj, n_trials=args.trials)
+        print("[OPTUNA] Best:", study.best_trial.params)
+        # Retrain best config fully
+        p = study.best_trial.params
         train_single(
-            best["hidden_dim"],
-            best["lr"],
-            best["lambda_sup"],
-            best["batch_size"],
-            SUP_EPOCHS_FULL,
-            ADV_EPOCHS_FULL,
-            tag_final,
-            mom_w=best["mom_w"],
-            kurt_w=best["kurt_w"],
+            args.msg_file,
+            args.ob_file,
+            seq_len=args.seq_len,
+            step=args.step,
+            hidden_dim=p.get("hidden_dim", args.hidden_dim),
+            batch_size=p.get("batch_size", args.batch_size),
+            lr=p.get("lr", args.lr),
+            sup_weight=p.get("sup_weight", args.sup_weight),
+            mom_weight=p.get("mom_weight", args.mom_weight),
+            kurt_weight=p.get("kurt_weight", args.kurt_weight),
+            sup_epochs=args.sup_epochs,
+            adv_epochs=args.adv_epochs,
+            tag=f"optuna_best_{args.tag}",
+        )
+    else:
+        # Single clean run (you can wrap your prior EXPERIMENTS here if desired)
+        train_single(
+            args.msg_file,
+            args.ob_file,
+            seq_len=args.seq_len,
+            step=args.step,
+            hidden_dim=args.hidden_dim,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            sup_weight=args.sup_weight,
+            mom_weight=args.mom_weight,
+            kurt_weight=args.kurt_weight,
+            sup_epochs=args.sup_epochs,
+            adv_epochs=args.adv_epochs,
+            tag=args.tag,
         )
