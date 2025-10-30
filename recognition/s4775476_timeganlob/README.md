@@ -51,19 +51,19 @@ A GRU classifier that distinguishes real latents $H = E(X)$ from synthetic $\hat
 
 Dataset loading and Preprocessing
 ---
-The Limit Order Book (LOB) represents the full state of market supply and demand through continuously updated bid and ask prices with their corresponding volumes. Modeling such data is challenging due to its high frequency, noise, and nonlinear temporal dependencies. Traditional models like ARIMA or simple RNNs often fail to capture these complex microstructure patterns.
+The Limit Order Book (LOB) capture the market's microstructure by recording all visible bid and ask quotes with their corresponding volumes. Modeling LOB data is challenging due to its high frequency, nonlinear dependencies and non-stationary temporal behaviour. Traditional models like ARIMA or simple RNNs often fail to capture these complex microstructure patterns.
 
-In this project, data is sourced from the LOBSTER dataset for Amazon (AMZN) on June 21, 2012, covering the trading interval from 09:30:00 to 16:00:00. The raw message and order-book files were processed into synchronized snapshots using a custom dataset pipeline (dataset.py).
+For this project, data was obtained from the LOBSTER dataset for Amazon (AMZN) on June 21, 2012, covering the trading the continous trading period from 09:30:00 to 16:00:00. The raw message and order-book files were merged into synchronized snapshots using a custom dataset pipeline. (dataset.py)
 
-Each sample is a sequence of 20 timesteps containing 43 standardized features, grouped into four categories:
+Each sample is a sequence of 20-64 timesteps containing 43 standardized features, categorized as follows:
 
-- Price levels: 20 bid and 20 ask relative prices (ticks from mid-price, scaled by 100).
-- Volume levels: 20 bid and 20 ask log-transformed sizes $(log(1 + size$ for stability).
+- Price levels: 20 bid and 20 ask relative prices, scaled as ticks from the mid-price (x100).
+- Volume levels: 20 bid and 20 ask log-transformed sizes $(log(1 + size$ for stability) for numerical stability.
 - Derived indicators: Spread (ask1 - bid1, scaled), mid-price return $(log(mid_t / mid_{t-1}))$, and imbalance (($bid1_s - ask1_s$) / ($bid1_s + ask1_s$)).
 
-All features are normalized using a StandardScaler and stored for reuse across training and inference. The resulting dataset contains approximately 26,973 total sequences, split into train (70%), validation (10%), and test (20%) sets.
+All features were normalized using StandardScaler and stored fitted scaler ready for reuse during inference. The resulting dataset contains approximately 26,900 synchronized snapshots, having splitted into train (70%), validation (10%), and test (20%) partitions.
 
-This structured preprocessing enables stable training of TimeGAN while preserving meaningful short-term order flow dynamics within each sequence window.
+This structured preprocessing ensures stable TimeGAN training while preserving meaningful short-term order flow dynamics within each sequence window.
 
 Model
 ---
