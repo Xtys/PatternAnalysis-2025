@@ -98,10 +98,22 @@ table 1: Metric scores based on baseline model
 Hyper Parameter Tuning with Optuna
 ---
 
+To identify the optimal configuration for TimeGAN on AMZN LOB Level-10 data, a Bayesian optimization study using Optuna (20 trials) was conducted.
+The objective minimized the combined validation reconstruction and supervised losses:
+$L_{obj} = 0.5×L_{recon} + 0.5 × L{sup$}$
+
+After re-training, the outcome obtained:
+Trial 13
+'''
+[Pretrain 010] recon=0.0099  sup=0.0049
+[ADV 030] D=0.46 | G=5.26
+[DONE] val_recon=0.0189 | val_sup=0.0024
+'''
+
+Trial 13 is the optimal configuration which achieved stable convergence without discriminator oscillation. The reconstruction and supervised losses both decreased smoothly, confirming effective temporal encoding.
 
 
 
-Retraining - coming soon
 
 Discussion and Conclusion
 ---
@@ -111,7 +123,7 @@ Reproducibility Commands
 ---
 Baseline model:
 ```
-python train.py \
+!python train.py \
   --msg_file AMZN_2012-06-21_34200000_57600000_message_10.csv \
   --ob_file  AMZN_2012-06-21_34200000_57600000_orderbook_10.csv \
   --seq_len 64 --step 32 \
@@ -122,7 +134,10 @@ python train.py \
   --adv_epochs 70 \
   --tag amzn_lvl10_full
 ```
-
+20 Trial
+'''
+!python3 train.py --optuna --trials 20 --sup_epochs 10 --adv_epochs 30 --tag optuna_search
+'''
 
 
 
