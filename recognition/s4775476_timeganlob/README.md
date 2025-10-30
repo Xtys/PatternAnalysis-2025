@@ -74,15 +74,7 @@ In Phase 2, the *Generator and Discriminator* are trained adversarially with lab
 
 Training
 ---
-Training proceeds in two phases, implemented in train.py with configurable sweeps over hyperparameters ($hidden_dim, lr, λ_sup, λ_kurt, batch_size$).
-- Phase 1 (Supervised Pretraining, 20 epochs): Optimize E and R for reconstruction loss MSE:
-			$$\mathcal{L}_{recon} = \| X - R(E(X)) \|^2$$
-and S for latent supervision loss  MSE:
-			$$\mathcal{L}_{sup} = \| S(E(X)) - E(X)_{1:} \|^2$$.
-- Phase 2 (Adversarial Training, 50 epochs): Alternate updates for D (BCE on real/fake latents) and G (adversarial BCE + $λ_{sup}$ * self-sup + moment matching). Moment loss enforces mean/variance alignment:
-			$$\mathcal{L}_{mom}$$ = $$\| \mu_{\tilde{X}} - \mu_X \|^2 + \| \sigma_{\tilde{X}}^2 - \sigma_X^2 \|^2$$.
-- Optimizers use Adam (lr=1e-3 baseline), with validation monitoring (recon/sup <0.005 target).
-- Checkpoints and loss plots are saved per experiment.
+Training was executed using the default hyperparameters to establish a control benchmark prior to hyperparameter optimization.
 
 
 Baseline Results
