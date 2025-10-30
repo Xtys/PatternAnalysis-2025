@@ -107,8 +107,10 @@ Discussion and Conclusion
 ---
 coming soon
 
-Reproducibility Code
+Reproducibility Commands
 ---
+Baseline model: 
+```
 python train.py \
   --msg_file AMZN_2012-06-21_34200000_57600000_message_10.csv \
   --ob_file  AMZN_2012-06-21_34200000_57600000_orderbook_10.csv \
@@ -119,8 +121,7 @@ python train.py \
   --sup_epochs 20 \
   --adv_epochs 70 \
   --tag amzn_lvl10_full
-
-
+```
 
 
 
