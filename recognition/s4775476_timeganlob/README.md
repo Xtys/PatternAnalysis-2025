@@ -72,7 +72,8 @@ In Phase 1, the Embedder–Recovery autoencoder reconstructs input sequences, wh
 In Phase 2, the *Generator and Discriminator* are trained adversarially with label smoothing (real = 0.9, fake = 0.0) to stabilize learning. The generator synthesizes noise-driven latent trajectories, guided by the pretrained modules to produce realistic LOB dynamics. Additional moment-matching (mean + variance) and kurtosis (4th-moment) losses enforce statistical consistency and capture the fat-tailed nature of LOB distributions.
 
 ![Alt Text](images/model_design.png)
-Figure 2: illustration of the two Phases
+
+Figure 2: illustration of the two Phases [1]
 
 Training
 ---
@@ -105,6 +106,23 @@ Retraining - coming soon
 Discussion and Conclusion
 ---
 coming soon
+
+Reproducibility Code
+---
+python train.py \
+  --msg_file AMZN_2012-06-21_34200000_57600000_message_10.csv \
+  --ob_file  AMZN_2012-06-21_34200000_57600000_orderbook_10.csv \
+  --seq_len 64 --step 32 \
+  --hidden_dim 64 \
+  --batch_size 32 \
+  --lr 1e-3 \
+  --sup_epochs 20 \
+  --adv_epochs 70 \
+  --tag amzn_lvl10_full
+
+
+
+
 
 
 References
