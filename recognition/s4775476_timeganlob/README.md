@@ -65,16 +65,14 @@ Model
 ---
 The model extends the TimeGAN framework as a sequence-to-sequence GAN for LOB data, trained in two phases to separate temporal learning from distributional alignment.
 
-In Phase 1, the Embedder–Recovery autoencoder reconstructs input sequences, while the Supervisor learns one-step transitions in the latent space. The latent dimension $d_h = 64$ compresses the 43-feature input while preserving temporal structure via single-layer GRUs. Tanh activations in the Embedder, Supervisor, and Generator bound latent values to [−1,1] for gradient stability.
+In Phase 1, the Embedder–Recovery autoencoder reconstructs input sequences, while the Supervisor learns one-step transitions in the latent space using sliced alignment (:,:−1,: → :,1:,:). The latent dimension $d_h = 64$ compresses the 43-feature input while preserving temporal structure through single-layer GRUs. Tanh activations in the Embedder, Supervisor, and Generator bound latent outputs to [−1,1] for stable gradient.
 
-In Phase 2, the Generator and Discriminator are trained adversarially. The generator synthesizes noise-driven latent trajectories, guided by the pretrained modules to produce realistic LOB dynamics. To correct for fat-tailed LOB distributions, moment-matching (mean + variance) and kurtosis losses are added, enforcing higher-order statistical consistency between real and synthetic features.
-
-Training uses Adam (lr ≈ 1e-3 / Optuna-tuned 4.5e-4), gradient clipping (‖∇‖≤5), and light weight decay (1e-5), ensuring stable convergence across 10 pretraining and 50 adversarial epochs.
+In Phase 2, the *Generator and Discriminator* are trained adversarially with label smoothing (real = 0.9, fake = 0.0) to stabilize learning. The generator synthesizes noise-driven latent trajectories, guided by the pretrained modules to produce realistic LOB dynamics. Additional moment-matching (mean + variance) and kurtosis (4th-moment) losses enforce statistical consistency and capture the fat-tailed nature of LOB distributions.
 
 ![Alt Text](images/model_design.png)
 
 
-Training Procedure
+Training
 ---
 Training proceeds in two phases, implemented in train.py with configurable sweeps over hyperparameters ($hidden_dim, lr, λ_sup, λ_kurt, batch_size$).
 - Phase 1 (Supervised Pretraining, 20 epochs): Optimize E and R for reconstruction loss MSE:
