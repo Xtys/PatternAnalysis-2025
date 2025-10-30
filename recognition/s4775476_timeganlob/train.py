@@ -215,48 +215,53 @@ def train_single(
     }
 
     # Phase 1: Supervised Pretrain (E+R (reconstruction) and S (temporal sup))
-    print("--- Phase 1: Reconstruction + Supervisor pretraining ---")
-    for epoch in range(SUP_EPOCHS):
+    print("--- Phase 1 ---")
+    for epoch in range(1, sup_epochs + 1):
         E.train()
         R.train()
         S.train()
-        epoch_recon_total, epoch_sup_total = 0, 0
+        ep_recon = 0.0
+        ep_sup = 0.0
+        for x in train_loader:
+            x = torch.as_tensor(x, dtype=torch.float32, device=device)
 
-        pbar = tqdm(train_loader, desc=f"Sup Epoch {epoch + 1}/{SUP_EPOCHS}")
-        for x in pbar:
-            x = x.to(device)
-
-            # Reconstruction: E => R => X_rec_hat
-            h_real = E(x)  # (B,T,64)
-            x_rec = R(h_real)  # (B,T,43)
-            recon_l = recon_loss_fn(x_rec, x)
-
+            # Reconstruction
             opt_E.zero_grad()
             opt_R.zero_grad()
+            h = E(x)  # (B,T,64)
+            x_rec = R(h)  # (B,T,43)
+            recon_l = MSE(x_rec, x)
             recon_l.backward()
+            if grad_clip:
+                nn.utils.clip_grad_norm_(E.parameters(), grad_clip)
+                nn.utils.clip_grad_norm_(R.parameters(), grad_clip)
             opt_E.step()
             opt_R.step()
 
-            # Supervisor:S predicts future latent state of E(x)d
-            h_real = E(x)
-            h_pred_next = S(h_real)
-            h_target = h_real.detach()[:, 1:, :]  # actual latent at t+1
-            sup_l = sup_loss_fn(h_pred_next[:, :-1, :], h_target)
-
+            # Supervisor
             opt_S.zero_grad()
-            sup_l.backward()
+            opt_E.zero_grad()
+            h = E(x)
+            h_pred = S(h)
+
+            sup_l = MSE(h_pred[:, :-1, :], h[:, 1:, :])
+            (sup_weight * sup_l).backward()
+            if grad_clip:
+                nn.utils.clip_grad_norm_(S.parameters(), grad_clip)
+                nn.utils.clip_grad_norm_(E.parameters(), grad_clip)
             opt_S.step()
+            opt_E.step()
 
-            epoch_recon_total += recon_l.item()
-            epoch_sup_total += sup_l.item()
-            pbar.set_postfix({"recon": f"{recon_l:.4f}", "sup": f"{sup_l:.4f}"})
+            ep_recon += recon_l.item()
+            ep_sup += sup_l.item()
 
-        avg_recon = epoch_recon_total / len(train_loader)
-        avg_sup = epoch_sup_total / len(train_loader)
-        loss_history["recon"].append(avg_recon)
-        loss_history["sup"].append(avg_sup)
-
-        print(f"[Phase1][Epoch {epoch + 1}] recon={avg_recon:.4f}  sup={avg_sup:.4f}")
+        n_batches = len(train_loader)
+        history["train_recon"].append(ep_recon / max(1, n_batches))
+        history["train_sup"].append(ep_sup / max(1, n_batches))
+        if verbose and (epoch == 1 or epoch % 2 == 0):
+            print(
+                f"[Pretrain {epoch:03d}] recon={history['train_recon'][-1]:.4f}  sup={history['train_sup'][-1]:.4f}"
+            )
 
     # phase 2: Adversarial Training
     print("--- Phase 2: Adversarial training ---")
