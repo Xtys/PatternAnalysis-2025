@@ -96,6 +96,7 @@ The model consisted of approximately **211k parameters** and was trained on an *
 *Table 1: Metric scores based on baseline model*
 
 ![Alt Text](images/predict_eval_baseline.png)
+*Figure 3: 5 representative heatmap visualizations*
 
 Hyper Parameter Tuning with Optuna
 ---
@@ -165,23 +166,28 @@ Trial 13
 
  **T13** (objective = 0.00451) used `hidden_dim = 128`, `batch_size = 16`, `lr ≈ 1.0e-4`, `sup_weight = 0.114`, `mom_weight = 0.0034`, `kurt_weight = 0.001`, `sup_epochs = 25`, and `adv_epochs = 99`.
 Assumption made here is that we will now use T13 as a starting point.
-Evaluation metrics (AMZN LOB Level-10):
+
 
 | Metric       | Target |  T 13  |  Pass  |
 | :----------- | :----: | :----: | :----: |
 | KL (spread)  | ≤ 0.1  | 20.68  | Failed |
 | KL (mid-ret) | ≤ 0.1  |  0.61  | Failed |
 | SSIM (avg)   | > 0.6  | −0.034 | Failed |
+
+*Evaluation metrics (AMZN LOB Level-10)*
+
 **Training behaviour:**
 
-- Generator loss peaked near 5.5 around epoch 40 and steadily declined below 2 after epoch 80 This shows somewhat stable adversarial convergence.
+- Generator loss peaked near 5.5 around epoch 40 and steadily declined below 2 after epoch 80 This shows somewhat stable adversarial convergence. *Figure 4: Generator Loss*
     ![Alt Text](images/gen_optuna_trial13_rerun.png)
-- Discriminator loss oscillated 0.4 – 1.4, is means some degree of healthy competition, but no model collapse.
+- Discriminator loss oscillated 0.4 – 1.4, is means some degree of healthy competition, but no model collapse. *Figure 5: Discriminator Loss*
 ![Alt Text](images/disc_optuna_trial13_rerun.png)
 
 ![Alt Text](images/predict_eval_t13.png)
+As shown in *Figure 6*, you can clearly see there is minimal improvement when compared to baseline model.
+### Follow up approach: Enhanced Trial 13
 
-#### Follow up approach
+
 
 
 
@@ -218,10 +224,8 @@ References
 ---
 [1] Yoon, J., Cho, J., & Lee, J. (2019). TimeGAN: A Time-series Generative Adversarial Network. arXiv preprint arXiv:1904.04442.
 
-[2] Boan, L., et al. (2024). MarketGAN: Controllable Financial Time Series Generation with Semantic Context. Proceedings of AAAI 2024. Available at: https://personal.ntu.edu.sg/boan/papers/AAAI24_MarketGAN.pdf.
-
-[3] Xu, Ke et al. (2019), "Multi-Level Order-Flow Imbalance in a Limit Order Book."
+[2] Xu, Ke et al. (2019), "Multi-Level Order-Flow Imbalance in a Limit Order Book."
 Available at: https://arxiv.org/abs/1907.06230
 
-[4] Akiba, T., Sano, S., Yanase, T., Ohta, T., & Koyama, M. (2019). _Optuna: A Next-generation Hyperparameter Optimization Framework._ Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (KDD ’19).
+[3] Akiba, T., Sano, S., Yanase, T., Ohta, T., & Koyama, M. (2019). _Optuna: A Next-generation Hyperparameter Optimization Framework._ Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (KDD ’19).
 URL: [https://optuna.org](https://optuna.org)
