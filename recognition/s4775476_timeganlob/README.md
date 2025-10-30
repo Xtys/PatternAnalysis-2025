@@ -131,3 +131,6 @@ References
 [1] Yoon, J., Cho, J., & Lee, J. (2019). TimeGAN: A Time-series Generative Adversarial Network. arXiv preprint arXiv:1904.04442.
 
 [2] Boan, L., et al. (2024). MarketGAN: Controllable Financial Time Series Generation with Semantic Context. Proceedings of AAAI 2024. Available at: https://personal.ntu.edu.sg/boan/papers/AAAI24_MarketGAN.pdf.
+
+[3] Xu, Ke et al. (2019), "Multi-Level Order-Flow Imbalance in a Limit Order Book."
+Available at: https://arxiv.org/abs/1907.06230
