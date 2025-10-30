@@ -8,8 +8,9 @@ ID:             S47754764
 Last update:    28/10/2025
 
 Reference:
-    Yoon, Jinsung et al. (2019), "Time-series Generative Adversarial Networks."
+    -Yoon, Jinsung et al. (2019), "Time-series Generative Adversarial Networks."
     https://github.com/jsyoon0823/TimeGAN
+
 """
 
 import torch
@@ -92,10 +93,8 @@ class Supervisor(nn.Module):
         Forward pass.
         """
         rnn_out, _ = self.rnn(h)
-        out = self.fc(rnn_out)
-        out = self.tanh(out)
-        # Shifted (B, T-1, hidden_dim) for autoregressive
-        return out[:, :-1, :]
+        out = self.tanh(self.fc(rnn_out))
+        return out  # keep full (B, T, hidden_dim)
 
 
 class Generator(nn.Module):
@@ -167,7 +166,7 @@ class Discriminator(nn.Module):
             Tensor: Real/fake probability (B, 1)
         """
         rnn_out, _ = self.rnn(x)
-        out = self.fc(rnn_out[:, -1, :])
+        out = self.fc(rnn_out.mean(dim=1))
         out = self.sigmoid(out)
         return out
 
