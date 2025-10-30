@@ -52,7 +52,10 @@ class LOBDataset(Dataset):
         X_train = self._normalize_features(train_df, scaler_type, train=True)
         X_test = self._normalize_features(test_df, scaler_type, train=False)
 
-        # X = self._normalize_features(ob_df, scaler_type, train)
+        if train:
+            X = X_train
+        else:
+            X = X_test
         seq_data = self._build_sequences(X, seq_len, step)
         self.data = self._split_data(seq_data, train, val_split)
 
@@ -60,6 +63,15 @@ class LOBDataset(Dataset):
 
         print(
             f"Split {self.split_type}: {len(self.data)} seqs (T={seq_len}, F={X.shape[1]}); full snaps: {len(ob_df)}"
+        )
+        torch.save(
+            {
+                "seq_len": seq_len,
+                "n_features": X.shape[1],
+                "split_type": self.split_type,
+                "scaler_type": scaler_type,
+            },
+            f"meta_{self.split_type}.pt",
         )
 
     # basic loaders
@@ -154,7 +166,6 @@ class LOBDataset(Dataset):
             + ["mid_ret", "spread", "imbalance"]
         )
         ob_df = ob_df[feats].dropna().reset_index(drop=True)
-        ob_df = ob_df.dropna()
         ob_df = ob_df.loc[:, ob_df.std() > 1e-8]
         print(f"Added relative/log features: {ob_df.shape[1]} columns.")
         return ob_df
@@ -186,7 +197,8 @@ class LOBDataset(Dataset):
             scaler = torch.load(scaler_path, weights_only=False)
             X = scaler.transform(X)
             print(f"Scaler loaded from {scaler_path}")
-            X = np.clip(X, -5, 5)
+
+        X = np.clip(X, -5, 5)
         return X
 
     def _build_sequences(self, X, seq_len, step):
