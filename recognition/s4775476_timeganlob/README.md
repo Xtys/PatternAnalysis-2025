@@ -78,33 +78,25 @@ Training
 ---
 #### Baseline Results
 Training was executed using the default hyperparameters to establish a control benchmark prior to hyperparameter optimization.
-This configuration employed a **single-layer GRU** architecture with latent dimension $d_{h}=64$, learning rate $1 \times 10^{-3}$ and a 70:20 epoch split between pretraining and adversarial phases.  
+This configuration employed a **single-layer GRU** architecture with latent dimension $d_{h}=64$, learning rate $1 \times 10^{-3}$ and a 70:20 epoch split between pretraining and adversarial phases.
 The model consisted of approximately **211k parameters** and was trained on an **NVIDIA L4 GPU (22 GB VRAM)**.
 
 **Training outcome:**
 - Pretraining converged smoothly with decreasing reconstruction and supervision losses (`recon ≈ 0.007`, `sup ≈ 0.005` after 20 epochs).
 - Adversarial training showed stable but limited generator–discriminator dynamics (`D ≈ 0.33`, `G ≈ 7.0` after 70 epochs).
 - Validation loss plateaued at `recon ≈ 0.0104`, `sup ≈ 0.0017`.
- 
+
 | Metric          | Target | Baseline | Pass |
 | --------------- | ------ | -------- | ---- |
 | KL (spread)     | ≤ 0.1  | 20.681   | ❌    |
 | KL (mid-return) | ≤ 0.1  | 0.608    | ❌    |
 | SSIM (heatmap)  | > 0.6  | 0.0197   | ❌    |
+
 table 1: Metric scores based on baseline model
 
-
+Hyper Parameter Tuning with Optuna
 ---
 
-|Metric|Real/Spec|Synth (Baseline)|Pass?|Notes|
-|---|---|---|---|---|
-|Autocorr Mid-Ret Diff|<0.05|0.050|False|Borderline temporal mismatch.|
-|Autocorr Imbalance Diff|<0.05|0.085|False|Weak order flow persistence.|
-|KS Spread p-val|>0.05|0.030|False|Distribution shift.|
-|Discrim Acc|~0.5-0.6|1.000|Fail|Easily detectable synth.|
-|KL Mid-Ret|≤0.1|0.170|False|Tail deficits.|
-|KL Spread|≤0.1|0.180|False|Variance clipping.|
-|SSIM Depths|>0.6|0.550|False|Smooth heatmaps.|
 
 
 
