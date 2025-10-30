@@ -16,6 +16,8 @@ The proroposed model adopts the TimeGAN framework [1], which integrates autoenco
 
 The latent dimension is set to $d_h = 64$, resulting in approximately 211,000 trainable parameters across the full network. The Embedder–Recovery pair learns a latent representation of real LOB sequences through reconstruction loss, while the Generator–Supervisor pair synthesizes latent trajectories that emulate temporal dynamics. The Discriminator distinguishes between real and generated latent sequences, thereby enforcing distributional realism through adversarial training.
 ![Alt Text](images/design.png)
+Figure 1: The architecture of the TimeGAN from the paper [1]
+
 1. **Embedder (E)**:
 The Embedder transforms the input sequence $X \in \mathbb{R}^{B \times T \times d_x}$ (where $d_x = 43$) into a latent representation $H \in \mathbb{R}^{B \times T \times d_h}$ using a single-layer GRU followed by a fully connected layer with tanh activation; where $\theta_E$ denotes the GRU parameters, and $W_h, b_h$ are the projection weights and bias. This encodes the high-dimensional LOB features into a compact, temporally aware space.
 
@@ -70,27 +72,29 @@ In Phase 1, the Embedder–Recovery autoencoder reconstructs input sequences, wh
 In Phase 2, the *Generator and Discriminator* are trained adversarially with label smoothing (real = 0.9, fake = 0.0) to stabilize learning. The generator synthesizes noise-driven latent trajectories, guided by the pretrained modules to produce realistic LOB dynamics. Additional moment-matching (mean + variance) and kurtosis (4th-moment) losses enforce statistical consistency and capture the fat-tailed nature of LOB distributions.
 
 ![Alt Text](images/model_design.png)
-
+Figure 2: illustration of the two Phases
 
 Training
 ---
+#### Baseline Results
 Training was executed using the default hyperparameters to establish a control benchmark prior to hyperparameter optimization.
+This configuration employed a **single-layer GRU** architecture with latent dimension $d_{h}=64$, learning rate $1 \times 10^{-3}$ and a 70:20 epoch split between pretraining and adversarial phases.  
+The model consisted of approximately **211k parameters** and was trained on an **NVIDIA L4 GPU (22 GB VRAM)**.
+
+**Training outcome:**
+- Pretraining converged smoothly with decreasing reconstruction and supervision losses (`recon ≈ 0.007`, `sup ≈ 0.005` after 20 epochs).
+- Adversarial training showed stable but limited generator–discriminator dynamics (`D ≈ 0.33`, `G ≈ 7.0` after 70 epochs).
+- Validation loss plateaued at `recon ≈ 0.0104`, `sup ≈ 0.0017`.
+ 
+| Metric          | Target | Baseline | Pass |
+| --------------- | ------ | -------- | ---- |
+| KL (spread)     | ≤ 0.1  | 20.681   | ❌    |
+| KL (mid-return) | ≤ 0.1  | 0.608    | ❌    |
+| SSIM (heatmap)  | > 0.6  | 0.0197   | ❌    |
+table 1: Metric scores based on baseline model
 
 
-Baseline Results
 ---
-we run six baseline configurations to assess sensitivity.
-Observing the val recon/sup which converging up to ~0.0046/0.0009.
-followed by eval which we then, generated 1,000 test-matched synthetic sequences, denormalized to synth_lob.csv.
-
-Evaluation on held-out test uses:
-- Autocorrelation match (|real - synth| <0.05 for mid_ret/imbalance).
-- KS-test (spread p>0.05).
-- External discriminator accuracy (LSTM classifier, target ~0.5-0.6).
-- KL divergence (hist-based, ≤0.1 for mid_ret/spread).
-- SSIM (>0.6 on padded depth heatmaps, 50 samples)
-
-Baseline Performance (hid64_sup0.1_bs32): All metrics failed.
 
 |Metric|Real/Spec|Synth (Baseline)|Pass?|Notes|
 |---|---|---|---|---|
