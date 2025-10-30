@@ -78,7 +78,7 @@ Figure 2: illustration of the two Phases [1]
 Training
 ---
 #### Baseline Results
-Training was executed using the default hyperparameters to establish a control benchmark prior to hyperparameter optimization.
+Training was executed on Google Colab using the default hyperparameters to establish a control benchmark prior to hyperparameter optimization.
 This configuration employed a **single-layer GRU** architecture with latent dimension $d_{h}=64$, learning rate $1 \times 10^{-3}$ and a 70:20 epoch split between pretraining and adversarial phases.
 The model consisted of approximately **211k parameters** and was trained on an **NVIDIA L4 GPU (22 GB VRAM)**.
 
@@ -109,7 +109,7 @@ coming soon
 
 Reproducibility Commands
 ---
-Baseline model: 
+Baseline model:
 ```
 python train.py \
   --msg_file AMZN_2012-06-21_34200000_57600000_message_10.csv \
