@@ -147,6 +147,40 @@ def moment_kurtosis_losses(
     return mom_loss, kurt_loss
 
 
+def fit_latent_stats(encoder, loader, device):
+    """Estimate latent mean and std from real encoded data."""
+    encoder.eval()
+    s1, s2, n = 0.0, 0.0, 0
+    with torch.no_grad():
+        for x in loader:
+            x = x.to(device, dtype=torch.float32)
+            h = encoder(x)
+            s1 += h.sum(dim=(0, 1))
+            s2 += (h**2).sum(dim=(0, 1))
+            n += h.shape[0] * h.shape[1]
+    mu = s1 / n
+    var = s2 / n - mu**2
+    std = (var.clamp_min(1e-8)).sqrt()
+    return mu.to(device), std.to(device)
+
+
+def ar1_noise_like(h_real, rho=0.8):
+    """Generate temporally correlated AR(1) latent noise."""
+    B, T, H = h_real.shape
+    eps = torch.randn_like(h_real)
+    z = torch.zeros_like(h_real)
+    z[:, 0, :] = eps[:, 0, :]
+    for t in range(1, T):
+        z[:, t, :] = rho * z[:, t - 1, :] + (1 - rho**2) ** 0.5 * eps[:, t, :]
+    return z
+
+
+def sample_empirical_like(h_real, mu, std, rho=0.8):
+    """Sample latent noise from empirical latent distribution (AR(1) + μσ)."""
+    z = ar1_noise_like(h_real, rho)
+    return z * std.view(1, 1, -1) + mu.view(1, 1, -1)
+
+
 # Training function
 def train_single(
     msg_file: str,
@@ -213,6 +247,9 @@ def train_single(
         "val_recon": [],
         "val_sup": [],
     }
+
+    # Fit latent mean/std for empirical prior
+    mu_h, std_h = fit_latent_stats(E, train_loader, device)
 
     # Phase 1: Supervised Pretrain (E+R (reconstruction) and S (temporal sup))
     print("--- Phase 1 ---")
@@ -283,7 +320,8 @@ def train_single(
             opt_D.zero_grad()
             with torch.no_grad():
                 h_real = E(x)
-                z = torch.randn_like(h_real)
+                # z = torch.randn_like(h_real)
+                z = sample_empirical_like(h_real, mu_h, std_h, rho=0.8)
                 h_fake = G(z)
             d_real = D(h_real)
             d_fake = D(h_fake)
@@ -330,7 +368,10 @@ def train_single(
             x_tilde = R(h_sup_full)
             rec_l = MSE(x_tilde, x)
             sup_real_l = MSE(h_sup_full[:, :-1, :], h[:, 1:, :])
-            (rec_l + 0.1 * sup_real_l).backward()
+            prior = torch.randn_like(h)
+            mmd = ((h - prior) ** 2).mean()
+            (rec_l + 0.1 * sup_real_l + 1e-3 * mmd).backward()
+            # (rec_l + 0.1 * sup_real_l).backward()
             if grad_clip:
                 nn.utils.clip_grad_norm_(E.parameters(), grad_clip)
                 nn.utils.clip_grad_norm_(R.parameters(), grad_clip)

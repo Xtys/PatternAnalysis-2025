@@ -141,28 +141,28 @@ Trial 13
 
 *Table 3: Below shows the 20 trials results and thier ranking*
 
-| Trial | Rank | hidden_dim |    lr    | sup_weight | mom_weight | kurt_weight | batch | sup_epochs | adv_epochs |  β₁   | seq_len | Obj. Value ↓ |
-| :---- | :--: | :--------: | :------: | :--------: | :--------: | :---------: | :---: | :--------: | :--------: | :---: | :-----: | :----------: |
-| 2     |  8   |    128     | 4.35e-03 |   0.218    |   0.0466   |   0.0719    |  32   |     11     |     51     | 0.713 |   32    |    0.3191    |
-| 3     |  3   |     64     | 2.19e-04 |   0.106    |  0.00579   |   0.00113   |  16   |     26     |     92     | 0.747 |   64    |   0.00753    |
-| 4     |  9   |     64     | 2.39e-03 |   0.263    |   0.0409   |   0.00695   |  16   |     20     |     80     | 0.659 |   64    |    0.2573    |
-| 5     |  2   |    128     | 1.61e-04 |   0.120    |  0.00268   |   0.0195    |  32   |     30     |     96     | 0.628 |   64    |   0.00609    |
-| 6     |  10  |     64     | 7.83e-03 |   0.247    |  0.00133   |   0.00810   |  64   |     10     |     51     | 0.703 |   64    |    0.1706    |
-| 7     |  6   |     64     | 1.90e-04 |   0.184    |  0.00467   |   0.00357   |  64   |     18     |     70     | 0.884 |   32    |    0.0376    |
-| 8     |  11  |     64     | 5.03e-03 |   0.120    |   0.0580   |   0.0242    |  32   |     30     |     52     | 0.721 |   64    |    0.1619    |
-| 9     |  4   |     64     | 2.93e-03 |   0.297    |  0.00754   |   0.00181   |  64   |     11     |     80     | 0.876 |   64    |    0.0127    |
-| 10    |  5   |     64     | 2.24e-04 |   0.257    |   0.0445   |   0.00449   |  32   |     28     |     53     | 0.619 |   64    |    0.0148    |
-| 11    |  7   |    128     | 7.97e-03 |   0.252    |   0.0522   |   0.0558    |  32   |     15     |     91     | 0.820 |   64    |    0.3230    |
-| 12    |  12  |     32     | 6.64e-04 |   0.0559   |  0.00131   |   0.0220    |  32   |     24     |     98     | 0.514 |   32    |    0.0178    |
-| 13    |  1   |    128     | 1.04e-04 |   0.114    |  0.00337   |   0.00100   |  16   |     25     |     99     | 0.574 |   64    | **0.00451**  |
-| 14    |  2   |    128     | 1.05e-04 |   0.133    |  0.00281   |   0.0192    |  16   |     24     |    100     | 0.563 |   64    |   0.00591    |
-| 15    |  3   |    128     | 1.02e-04 |   0.161    |   0.0169   |   0.0131    |  16   |     23     |    100     | 0.513 |   64    |   0.00573    |
-| 16    | 2-3  |    128     | 5.05e-04 |   0.175    |   0.0168   |   0.00271   |  16   |     23     |     87     | 0.509 |   32    |   0.00483    |
-| 17    |  13  |     32     | 6.28e-04 |   0.0729   |   0.0164   |   0.00101   |  16   |     21     |     86     | 0.579 |   32    |    0.0176    |
-| 18    |  4   |    128     | 4.58e-04 |   0.173    |   0.0117   |   0.00249   |  16   |     17     |     68     | 0.567 |   32    |   0.00684    |
-| 19    |  14  |    128     | 1.29e-03 |   0.203    |   0.0225   |   0.00180   |  16   |     27     |     87     | 0.516 |   32    |    0.2655    |
-| 20    | 2-4  |    128     | 3.42e-04 |   0.0876   |  0.00318   |   0.00429   |  16   |     22     |     81     | 0.646 |   32    |   0.00539    |
-| 21    |  15  |     32     | 8.32e-04 |   0.143    |   0.0967   |   0.00168   |  16   |     25     |     93     | 0.581 |   32    |   0.02196    |
+| Rank | Trial | hidden_dim |    lr    | sup_weight | mom_weight | kurt_weight | batch | sup_epochs | adv_epochs |  β₁   | seq_len | Obj. Value ↓ |
+| :--: | :---- | :--------: | :------: | :--------: | :--------: | :---------: | :---: | :--------: | :--------: | :---: | :-----: | :----------: |
+|  8   | 2     |    128     | 4.35e-03 |   0.218    |   0.0466   |   0.0719    |  32   |     11     |     51     | 0.713 |   32    |    0.3191    |
+|  3   | 3     |     64     | 2.19e-04 |   0.106    |  0.00579   |   0.00113   |  16   |     26     |     92     | 0.747 |   64    |   0.00753    |
+|  9   | 4     |     64     | 2.39e-03 |   0.263    |   0.0409   |   0.00695   |  16   |     20     |     80     | 0.659 |   64    |    0.2573    |
+|  2   | 5     |    128     | 1.61e-04 |   0.120    |  0.00268   |   0.0195    |  32   |     30     |     96     | 0.628 |   64    |   0.00609    |
+|  10  | 6     |     64     | 7.83e-03 |   0.247    |  0.00133   |   0.00810   |  64   |     10     |     51     | 0.703 |   64    |    0.1706    |
+|  6   | 7     |     64     | 1.90e-04 |   0.184    |  0.00467   |   0.00357   |  64   |     18     |     70     | 0.884 |   32    |    0.0376    |
+|  11  | 8     |     64     | 5.03e-03 |   0.120    |   0.0580   |   0.0242    |  32   |     30     |     52     | 0.721 |   64    |    0.1619    |
+|  4   | 9     |     64     | 2.93e-03 |   0.297    |  0.00754   |   0.00181   |  64   |     11     |     80     | 0.876 |   64    |    0.0127    |
+|  5   | 10    |     64     | 2.24e-04 |   0.257    |   0.0445   |   0.00449   |  32   |     28     |     53     | 0.619 |   64    |    0.0148    |
+|  7   | 11    |    128     | 7.97e-03 |   0.252    |   0.0522   |   0.0558    |  32   |     15     |     91     | 0.820 |   64    |    0.3230    |
+|  12  | 12    |     32     | 6.64e-04 |   0.0559   |  0.00131   |   0.0220    |  32   |     24     |     98     | 0.514 |   32    |    0.0178    |
+|  1   | 13    |    128     | 1.04e-04 |   0.114    |  0.00337   |   0.00100   |  16   |     25     |     99     | 0.574 |   64    | **0.00451**  |
+|  2   | 14    |    128     | 1.05e-04 |   0.133    |  0.00281   |   0.0192    |  16   |     24     |    100     | 0.563 |   64    |   0.00591    |
+|  3   | 15    |    128     | 1.02e-04 |   0.161    |   0.0169   |   0.0131    |  16   |     23     |    100     | 0.513 |   64    |   0.00573    |
+| 2-3  | 16    |    128     | 5.05e-04 |   0.175    |   0.0168   |   0.00271   |  16   |     23     |     87     | 0.509 |   32    |   0.00483    |
+|  13  | 17    |     32     | 6.28e-04 |   0.0729   |   0.0164   |   0.00101   |  16   |     21     |     86     | 0.579 |   32    |    0.0176    |
+|  4   | 18    |    128     | 4.58e-04 |   0.173    |   0.0117   |   0.00249   |  16   |     17     |     68     | 0.567 |   32    |   0.00684    |
+|  14  | 19    |    128     | 1.29e-03 |   0.203    |   0.0225   |   0.00180   |  16   |     27     |     87     | 0.516 |   32    |    0.2655    |
+| 2-4  | 20    |    128     | 3.42e-04 |   0.0876   |  0.00318   |   0.00429   |  16   |     22     |     81     | 0.646 |   32    |   0.00539    |
+|  15  | 21    |     32     | 8.32e-04 |   0.143    |   0.0967   |   0.00168   |  16   |     25     |     93     | 0.581 |   32    |   0.02196    |
 
  **T13** (objective = 0.00451) used `hidden_dim = 128`, `batch_size = 16`, `lr ≈ 1.0e-4`, `sup_weight = 0.114`, `mom_weight = 0.0034`, `kurt_weight = 0.001`, `sup_epochs = 25`, and `adv_epochs = 99`.
 Assumption made here is that we will now use T13 as a starting point.
@@ -188,17 +188,39 @@ As shown in *Figure 6*, you can clearly see there is minimal improvement when co
 
 ### Follow up approach: Enhanced Trial 13
 
-Our goal is to reduce over-smooth generations (low contrast heatmaps) and stabilize late-epoch GAN dynamics to improve SSIM and distributional fit.
+To address over-smooth outputs and unstable GAN dynamics, the enhanced TimeGAN introduced several refinements. Training depth was increased (30 pretrain / 120 adversarial epochs) for smoother convergence and the learning rate (0.0002) with hidden dimension (96) was tuned to balance capacity and stability. 
+
+Loss weights were re-scaled (`sup_weight=0.12`) with stronger moment and kurtosis penalties, while tighter gradient clipping prevented divergence. Empirical latent sampling replaced the Gaussian prior, ensuring generator inputs followed the true latent manifold. 
+
+Additionally, a temporal **AR(1)** correlation model introduced sequentially dependent noise, and a lightweight **MMD prior-matching** regularizer aligned encoder and generator distributions. Collectively, these changes improved temporal coherence and reduced oscillation, though statistical fidelity to real LOB data remained challenging.
+
+Here is the evaluation: 
+
+| Metric                      | Symbol   | Enhanced (v2) Value | Target Threshold | Pass/Fail |
+| :-------------------------- | :------- | :------------------ | :--------------- | :-------- |
+| KL Divergence (Spread)      | KLₛₚᵣₑₐd | **20.6629**         | ≤ 0.1            | No        |
+| KL Divergence (Mid-Return)  | KLₘᵢd    | **0.6086**          | ≤ 0.1            | No        |
+| Structural Similarity Index | SSIM     | **−0.0120**         | > 0.6            | No        |
+| AR(1) Temporal Gap          | ΔAR₁     | **0.0632**          | ≈ 0              | Yes       |
+| Latent Divergence           | D_lat    | **0.8912**          | < 0.05           | No        |
+
+*Figure 7: Enhanced Generator Loss*
+ ![Alt Text](images/gen_optuna_t13_enhanced_v2.png)
+*Figure 8: Enhanced Discriminator Loss*
+
+![Alt Text](images/disc_optuna_t13_enhanced_v2.png)
 
 
+*Figure 9: Enhanced 5 representative heatmap *
 
-
-
-
-
+![Alt Text](images/predict_eval_enhance.png)
 Error Analysis and Conclusion
 ---
-coming soon
+The enhanced configuration demonstrated **stronger training stability** (Figure: Gen/Disc losses flattened after ~60 epochs) and **improved temporal consistency** (AR(1)=0.063), confirming that the autoregressive latent model and prior-matching regularizer contributed to smoother sequential transitions.
+
+However, **distributional fidelity** remained poor. As shown in both KL divergences far exceeded thresholds, indicating the model still fails to capture the heavy-tailed, non-stationary spread and midprice behavior of real LOB data. The **SSIM ≈ −0.01** suggests synthetic depth maps remained overly smooth with low contrast, a common artifact of mode averaging in GANs trained on temporally dense, high-noise data.
+
+Latent divergence (≈0.89) further implies partial mismatch between encoder and generator priors, meaning empirical latent sampling reduced but did not eliminate space misalignment.
 
 Reproducibility Commands
 ---
@@ -215,12 +237,61 @@ Baseline model:
   --adv_epochs 70 \
   --tag amzn_lvl10_full
 ```
+
 20 Trial Optuna tuning:
 ```
 !python3 train.py --optuna --trials 20 --sup_epochs 10 --adv_epochs 30 --tag optuna_search
 ```
 
+Enhance version: 
+```
+# enhance
 
+!python3 train.py \
+
+--msg_file AMZN_2012-06-21_34200000_57600000_message_10.csv \
+
+--ob_file AMZN_2012-06-21_34200000_57600000_orderbook_10.csv \
+
+--seq_len 64 \
+
+--step 32 \
+
+--hidden_dim 128 \
+
+--batch_size 16 \
+
+--lr 0.00010412915764623505 \
+
+--sup_weight 0.11403144603810789 \
+
+--mom_weight 0.0033727324762965363 \
+
+--kurt_weight 0.0010033163890578497 \
+
+--sup_epochs 25 \
+
+--adv_epochs 120 \
+
+--tag "optuna_t13_enhanced_v2" \
+
+--seed 42
+```
+
+
+```
+!python3 predict.py \
+
+--checkpoint checkpoints/optuna_t13_enhanced.pth \
+
+--num_synth 1500 \
+
+--hidden_dim 128 \
+
+--tag optuna_t13_enhanced \
+
+--seq_len 64
+```
 References
 ---
 [1] Yoon, J., Cho, J., & Lee, J. (2019). TimeGAN: A Time-series Generative Adversarial Network. arXiv preprint arXiv:1904.04442.
