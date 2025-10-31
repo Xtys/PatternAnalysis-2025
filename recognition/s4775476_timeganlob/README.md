@@ -2,13 +2,11 @@
 
 Abstract
 ---
-This project focuses on generating synthetic Limit Order Book (LOB) sequences using TimeGAN, a model that combines recurrent and adversarial learning to capture both temporal and statistical properties of sequential data. The objective is to produce realistic synthetic LOB data that resembles actual market dynamics, particularly in mid-price returns, spread, and order imbalance.
+This project investigates synthetic Limit Order Book (LOB) generation using TimeGAN, combining recurrent and adversarial learning to model temporal and distributional patterns in high-frequency trading data. Using the LOBSTER AMZN Level-10 (2012) dataset, sequences of 43 engineered features were modeled through a two-phase pipeline: supervised reconstruction followed by adversarial refinement.
 
-The dataset used is the LOBSTER feed for AMZN (2012), processed into 20-step sequences with 43 engineered features including relative prices, log volumes, and derived market indicators. The training follows a two-phase structure: Phase 1 for reconstruction and supervised consistency, and Phase 2 for adversarial fine-tuning.
+Hyperparameter optimization with Optuna guided the search for stable configurations, while an enhanced variant introduced extended training, empirical latent sampling, and autoregressive (AR(1)) latent correlations to improve temporal realism.
 
-Evaluation is based on the task specification metrics: KL divergence (≤ 0.1), SSIM (> 0.6), and discriminator accuracy (~0.5). The baseline model was able to learn temporal relationships but struggled to replicate the true distributional shape, leading to high discriminator accuracy and poor SSIM scores.
-
-These findings highlight the need for further tuning. In the next stage, the model integrates a kurtosis-based proxy loss to better represent tail behavior and employs Optuna for hyperparameter optimization to improve stability and generalization. The enhanced model achieves full specification compliance, with all metrics passing thresholds, demonstrating improved fidelity for downstream market simulations.
+Although the enhanced model achieved greater training stability and smoother loss dynamics, it still failed to meet target metrics (KL ≤ 0.1, SSIM > 0.6), indicating persistent challenges in reproducing real-world distribution tails and visual depth structure. The findings underline the difficulty of capturing LOB complexity within adversarial frameworks and point to future work involving adaptive priors and attention-based temporal modeling.
 
 Model Architecture
 ---
@@ -188,13 +186,13 @@ As shown in *Figure 6*, you can clearly see there is minimal improvement when co
 
 ### Follow up approach: Enhanced Trial 13
 
-To address over-smooth outputs and unstable GAN dynamics, the enhanced TimeGAN introduced several refinements. Training depth was increased (30 pretrain / 120 adversarial epochs) for smoother convergence and the learning rate (0.0002) with hidden dimension (96) was tuned to balance capacity and stability. 
+To address over-smooth outputs and unstable GAN dynamics, the enhanced TimeGAN introduced several refinements. Training depth was increased (30 pretrain / 120 adversarial epochs) for smoother convergence and the learning rate (0.0002) with hidden dimension (96) was tuned to balance capacity and stability.
 
-Loss weights were re-scaled (`sup_weight=0.12`) with stronger moment and kurtosis penalties, while tighter gradient clipping prevented divergence. Empirical latent sampling replaced the Gaussian prior, ensuring generator inputs followed the true latent manifold. 
+Loss weights were re-scaled (`sup_weight=0.12`) with stronger moment and kurtosis penalties, while tighter gradient clipping prevented divergence. Empirical latent sampling replaced the Gaussian prior, ensuring generator inputs followed the true latent manifold.
 
 Additionally, a temporal **AR(1)** correlation model introduced sequentially dependent noise, and a lightweight **MMD prior-matching** regularizer aligned encoder and generator distributions. Collectively, these changes improved temporal coherence and reduced oscillation, though statistical fidelity to real LOB data remained challenging.
 
-Here is the evaluation: 
+Here is the evaluation:
 
 | Metric                      | Symbol   | Enhanced (v2) Value | Target Threshold | Pass/Fail |
 | :-------------------------- | :------- | :------------------ | :--------------- | :-------- |
@@ -211,7 +209,7 @@ Here is the evaluation:
 ![Alt Text](images/disc_optuna_t13_enhanced_v2.png)
 
 
-*Figure 9: Enhanced 5 representative heatmap *
+*Figure 9: Enhanced 5 representative heatmap*
 
 ![Alt Text](images/predict_eval_enhance.png)
 Error Analysis and Conclusion
@@ -220,7 +218,7 @@ The enhanced configuration demonstrated **stronger training stability** (Figure:
 
 However, **distributional fidelity** remained poor. As shown in both KL divergences far exceeded thresholds, indicating the model still fails to capture the heavy-tailed, non-stationary spread and midprice behavior of real LOB data. The **SSIM ≈ −0.01** suggests synthetic depth maps remained overly smooth with low contrast, a common artifact of mode averaging in GANs trained on temporally dense, high-noise data.
 
-Latent divergence (≈0.89) further implies partial mismatch between encoder and generator priors, meaning empirical latent sampling reduced but did not eliminate space misalignment.
+The relatively high latent divergence (≈0.89) reflects residual mismatch between encoder and generator priors. Nevertheless, this is an expected outcome given the adoption of a more complex empirical prior distribution, where TimeGAN’s latent space constraints successfully mitigated but failed to fully eliminate.
 
 Reproducibility Commands
 ---
@@ -243,7 +241,7 @@ Baseline model:
 !python3 train.py --optuna --trials 20 --sup_epochs 10 --adv_epochs 30 --tag optuna_search
 ```
 
-Enhance version: 
+Enhance version:
 ```
 # enhance
 
