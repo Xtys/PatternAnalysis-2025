@@ -36,19 +36,10 @@ from modules import (
     Generator,
     Discriminator,
 )
-# import torch.nn.functional as F
 
-# SEQ_LEN = 20
-# SUP_EPOCHS_FULL = 20  # "pretrain" phase
-# ADV_EPOCHS_FULL = 50  # adversarial phase
-# MSG_FILE = "AMZN_2012-06-21_34200000_57600000_message_10.csv"
-# OB_FILE = "AMZN_2012-06-21_34200000_57600000_orderbook_10.csv"
-
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# print("Device:", device)
-
-# os.makedirs("checkpoints", exist_ok=True)
-# os.makedirs("plots", exist_ok=True)
+import copy
+from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.nn.utils import spectral_norm
 
 
 def set_seed(seed: int = 42) -> None:
@@ -146,7 +137,7 @@ def moment_kurtosis_losses(
     kurt_loss = (kr - kf).pow(2).mean()
     return mom_loss, kurt_loss
 
-
+# Latent Noise Enhancement (Empirical + AR(1) Sampling)
 def fit_latent_stats(encoder, loader, device):
     """Estimate latent mean and std from real encoded data."""
     encoder.eval()
@@ -171,7 +162,7 @@ def ar1_noise_like(h_real, rho=0.8):
     z = torch.zeros_like(h_real)
     z[:, 0, :] = eps[:, 0, :]
     for t in range(1, T):
-        z[:, t, :] = rho * z[:, t - 1, :] + (1 - rho**2) ** 0.5 * eps[:, t, :]
+        z[:, t, :] = rho * z[:, t - 1, :] + (1 - rho**2)**0.5 * eps[:, t, :]
     return z
 
 
@@ -179,7 +170,6 @@ def sample_empirical_like(h_real, mu, std, rho=0.8):
     """Sample latent noise from empirical latent distribution (AR(1) + μσ)."""
     z = ar1_noise_like(h_real, rho)
     return z * std.view(1, 1, -1) + mu.view(1, 1, -1)
-
 
 # Training function
 def train_single(
@@ -196,6 +186,7 @@ def train_single(
     kurt_weight: float = 5e-2,
     sup_epochs: int = 10,
     adv_epochs: int = 50,
+    beta1: float = 0.9,                 # Adam β₁ momentum term
     tag: str = "baseline",
     device: torch.device | None = None,
     grad_clip: float = 5.0,
@@ -232,11 +223,19 @@ def train_single(
         print(f"[GPU] {name} ~ {vram:.1f} GB")
 
     # Optimizers
-    opt_E = optim.Adam(E.parameters(), lr=LR)
-    opt_R = optim.Adam(R.parameters(), lr=LR)
-    opt_S = optim.Adam(S.parameters(), lr=LR)
-    opt_G = optim.Adam(G.parameters(), lr=LR)
-    opt_D = optim.Adam(D.parameters(), lr=LR)
+    opt_E = optim.Adam(E.parameters(), lr=lr, betas=(beta1, 0.999))
+    opt_R = optim.Adam(R.parameters(), lr=lr, betas=(beta1, 0.999))
+    opt_S = optim.Adam(S.parameters(), lr=lr, betas=(beta1, 0.999))
+    opt_G = optim.Adam(G.parameters(), lr=lr, betas=(beta1, 0.999))
+    opt_D = optim.Adam(D.parameters(), lr=lr, betas=(beta1, 0.999))
+
+    # 🔹 Add cosine LR scheduler
+    sched_G = CosineAnnealingLR(opt_G, T_max=adv_epochs, eta_min=1e-6)
+    sched_D = CosineAnnealingLR(opt_D, T_max=adv_epochs, eta_min=1e-6)
+
+    # 🔹 Add EMA of generator
+    G_ema = copy.deepcopy(G)
+    ema_decay = 0.999
 
     # Tracking loss history
     history = {
@@ -311,10 +310,23 @@ def train_single(
         ep_d = 0.0
         ep_g = 0.0
 
+        # Annealed weights (sup warm-up; moment/kurt start later)
+        sup_wt = sup_weight * (0.2 + 0.8 * min(1.0, epoch / 40))
+        mom_wt = mom_weight * min(1.0, epoch / 40)
+        kurt_wt = kurt_weight * min(1.0, epoch / 40)
+
+        # Instance noise schedule
+        sigma = max(0.0, 0.05 * (1 - epoch / adv_epochs))
+
         for x in train_loader:
             x = torch.as_tensor(x, dtype=torch.float32, device=device)
             bsz = x.size(0)
-            real_lbl, fake_lbl = adversarial_targets(bsz, device)
+
+            # real_lbl, fake_lbl = adversarial_targets(bsz, device)
+
+            # Label smoothing (real=0.9)
+            real_lbl = torch.full((bsz, 1), 0.9, device=device)
+            fake_lbl = torch.zeros((bsz, 1), device=device)
 
             # Train Discriminator
             opt_D.zero_grad()
@@ -323,6 +335,10 @@ def train_single(
                 # z = torch.randn_like(h_real)
                 z = sample_empirical_like(h_real, mu_h, std_h, rho=0.8)
                 h_fake = G(z)
+            # Instance noise
+            h_real += torch.randn_like(h_real) * sigma
+            h_fake += torch.randn_like(h_fake) * sigma
+
             d_real = D(h_real)
             d_fake = D(h_fake)
             d_loss = BCE(d_real, real_lbl) + BCE(d_fake, fake_lbl)
@@ -358,6 +374,11 @@ def train_single(
                 nn.utils.clip_grad_norm_(S.parameters(), grad_clip)
             opt_G.step()
 
+            # === Update EMA Generator ===
+            with torch.no_grad():
+                for p_ema, p in zip(G_ema.parameters(), G.parameters()):
+                    p_ema.mul_(ema_decay).add_(p, alpha=1 - ema_decay)
+
             # Joint train E/R/S on real
             opt_E.zero_grad()
             opt_R.zero_grad()
@@ -369,7 +390,7 @@ def train_single(
             rec_l = MSE(x_tilde, x)
             sup_real_l = MSE(h_sup_full[:, :-1, :], h[:, 1:, :])
             prior = torch.randn_like(h)
-            mmd = ((h - prior) ** 2).mean()
+            mmd = ((h - prior)**2).mean()
             (rec_l + 0.1 * sup_real_l + 1e-3 * mmd).backward()
             # (rec_l + 0.1 * sup_real_l).backward()
             if grad_clip:
@@ -379,11 +400,15 @@ def train_single(
             opt_E.step()
             opt_R.step()
             opt_S.step()
+
             ep_d += d_loss.item()
             ep_g += g_total.item()
 
         history["disc"].append(ep_d / max(1, len(train_loader)))
         history["gen"].append(ep_g / max(1, len(train_loader)))
+        sched_G.step()
+        sched_D.step()
+
         if verbose and (epoch == 1 or epoch % 5 == 0):
             print(
                 f"[ADV {epoch:03d}] D={history['disc'][-1]:.4f} | G={history['gen'][-1]:.4f}"
@@ -448,11 +473,19 @@ def objective(trial: "optuna.trial.Trial") -> float:
 
     # Hyperparameter (search space)
     hidden_dim = trial.suggest_categorical("hidden_dim", [32, 64, 128])
-    lr = trial.suggest_loguniform("lr", 1e-4, 1e-2)
-    sup_w = trial.suggest_uniform("sup_weight", 0.05, 0.3)
-    mom_w = trial.suggest_loguniform("mom_weight", 1e-3, 1e-1)
-    kurt_w = trial.suggest_loguniform("kurt_weight", 1e-3, 1e-1)
+    lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
+    sup_w = trial.suggest_float("sup_weight", 0.05, 0.3)
+    mom_w = trial.suggest_float("mom_weight", 1e-3, 1e-1, log=True)
+    kurt_w = trial.suggest_float("kurt_weight", 1e-3, 1e-1, log=True)
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+
+    # Extended parameters
+    sup_epochs = trial.suggest_int("sup_epochs", 10, 30)
+    adv_epochs = trial.suggest_int("adv_epochs", 50, 100)
+    beta1 = trial.suggest_float("optimizer_beta1", 0.5, 0.9)
+    seq_len = trial.suggest_categorical("seq_len", [32, 64])
+    # dropout = trial.suggest_float("dropout", 0.0, 0.3)
+
 
     # Short runs for tuning
     val_recon, val_sup = train_single(
@@ -466,8 +499,9 @@ def objective(trial: "optuna.trial.Trial") -> float:
         sup_weight=sup_w,
         mom_weight=mom_w,
         kurt_weight=kurt_w,
-        sup_epochs=max(3, args.sup_epochs // 2),
-        adv_epochs=max(6, args.adv_epochs // 3),
+        sup_epochs=sup_epochs,          # full epochs for more representative tuning
+        adv_epochs=adv_epochs,
+        beta1=beta1,
         tag=f"optuna_trial{trial.number}",
         verbose=False,
     )
@@ -514,7 +548,13 @@ if __name__ == "__main__":
         if optuna is None:
             raise RuntimeError("Optuna not installed. pip install optuna")
         # Attach file paths for objective()
-        study = optuna.create_study(direction="minimize")
+        # study = optuna.create_study(direction="minimize")
+        study = optuna.create_study(
+            study_name="timegan_lob_optuna",
+            storage="sqlite:///optuna_timegan.db",
+            direction="minimize",
+            load_if_exists=True                     # Reuses same study if rerun
+        )
 
         # (Optional) set attrs with file names to avoid globals
         def _obj(trial):
