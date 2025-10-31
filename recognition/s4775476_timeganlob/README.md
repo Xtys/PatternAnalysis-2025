@@ -178,15 +178,17 @@ Assumption made here is that we will now use T13 as a starting point.
 
 **Training behaviour:**
 
-- Generator loss peaked near 5.5 around epoch 40 and steadily declined below 2 after epoch 80 This shows somewhat stable adversarial convergence. *Figure 4: Generator Loss*
+- *Figure 4: Generator Loss* shown peaked near 5.5 around epoch 40 and steadily declined below 2 after epoch 80 This shows somewhat stable adversarial convergence.
     ![Alt Text](images/gen_optuna_trial13_rerun.png)
-- Discriminator loss oscillated 0.4 – 1.4, is means some degree of healthy competition, but no model collapse. *Figure 5: Discriminator Loss*
+- *Figure 5: Discriminator Loss* shown oscillated 0.4 – 1.4, is means some degree of healthy competition, but no model collapse.
 ![Alt Text](images/disc_optuna_trial13_rerun.png)
 
 ![Alt Text](images/predict_eval_t13.png)
 As shown in *Figure 6*, you can clearly see there is minimal improvement when compared to baseline model.
+
 ### Follow up approach: Enhanced Trial 13
 
+Our goal is to reduce over-smooth generations (low contrast heatmaps) and stabilize late-epoch GAN dynamics to improve SSIM and distributional fit.
 
 
 
@@ -194,8 +196,7 @@ As shown in *Figure 6*, you can clearly see there is minimal improvement when co
 
 
 
-
-Discussion and Conclusion
+Error Analysis and Conclusion
 ---
 coming soon
 
